@@ -35,7 +35,7 @@ Run `optimus agents` to see what's detected. Override a binary or add default ar
 
 ## Install
 
-Requires Go 1.23+ and tmux.
+Requires Go 1.25+ and tmux.
 
 ```sh
 make install          # → ~/.local/bin/optimus

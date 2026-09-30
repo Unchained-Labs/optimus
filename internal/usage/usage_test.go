@@ -37,7 +37,7 @@ func TestBlocksAndGroups(t *testing.T) {
 	base := time.Date(2026, 9, 1, 8, 0, 0, 0, time.Local)
 	h := func(d time.Duration) int64 { return base.Add(d).Unix() }
 	s := &model.Session{Agent: "claude", Cwd: "/a", Buckets: []model.Bucket{
-		{Hour: h(0), Model: "claude-haiku-4-5", Usage: model.Usage{Output: 1e6}},       // $5
+		{Hour: h(0), Model: "claude-haiku-4-5", Usage: model.Usage{Output: 1e6}},             // $5
 		{Hour: h(3 * time.Hour), Model: "claude-haiku-4-5", Usage: model.Usage{Output: 1e6}}, // same block
 		{Hour: h(6 * time.Hour), Model: "claude-haiku-4-5", Usage: model.Usage{Output: 1e6}}, // new block
 	}}

@@ -37,12 +37,12 @@ var tabNames = []string{"Agents", "Sessions", "Projects", "Usage"}
 type mode int
 
 const (
-	modeNormal mode = iota
-	modePick        // picker modal
-	modeInput       // single-line text input modal
-	modeConfirm     // y/n
-	modeDetail      // transcript viewer
-	modeFilter      // typing into the sessions filter
+	modeNormal  mode = iota
+	modePick         // picker modal
+	modeInput        // single-line text input modal
+	modeConfirm      // y/n
+	modeDetail       // transcript viewer
+	modeFilter       // typing into the sessions filter
 	modeHelp
 )
 
