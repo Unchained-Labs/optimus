@@ -1,5 +1,7 @@
 # optimus
 
+![optimus demo](demo/optimus.gif)
+
 **The tmux of AI coding agents.** One terminal dashboard to run, watch and switch between Claude Code, Codex, opencode and friends; see what they cost and how much quota is left; and carry context from one session to another, even across agents.
 
 ```
@@ -102,6 +104,10 @@ optimus projects
 - **Index**: each provider parses its agent's transcripts into sessions with per-hour, per-model token buckets. Results are cached in `~/.cache/optimus/index.gob`, keyed by file size and mtime, so only changed sessions are re-read. `optimus reindex` rebuilds the cache.
 - **Multiplexer**: a dedicated tmux server with its own config (`~/.config/optimus/tmux.conf`, generated). Windows carry `@optimus_agent`, `@optimus_cwd` and `@optimus_session` options. Claude sessions get a pre-assigned `--session-id`, so optimus always knows which transcript belongs to which window. The agent state badge is a heuristic based on the bottom of the pane.
 - **Handoff**: documents are saved in `~/.local/state/optimus/handoffs/`. The receiving agent gets a one-line prompt telling it to read the file. That avoids argv and paste-size limits and works with every agent.
+
+## Demo
+
+`demo/optimus.mp4` / `demo/optimus.gif` were recorded with [VHS](https://github.com/charmbracelet/vhs) from `demo/demo.tape`. The recording runs against a synthetic home (`demo/seed.py`) and mock agents (`demo/fake-agent.py`) on a separate tmux socket, so no real sessions or tokens are involved. Re-record with `demo/record.sh` (needs vhs, ttyd, ffmpeg).
 
 ## Layout
 

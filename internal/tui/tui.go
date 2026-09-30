@@ -311,7 +311,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) attach(id string) tea.Cmd {
-	return tea.ExecProcess(mux.AttachCmd(id), func(err error) tea.Msg { return attachedMsg{err} })
+	return tea.ExecProcess(mux.AttachCmdQuiet(id), func(err error) tea.Msg { return attachedMsg{err} })
 }
 
 func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {

@@ -18,10 +18,18 @@ import (
 	"github.com/wardn/optimus/internal/config"
 )
 
-const (
-	Socket  = "optimus"
-	Session = "optimus"
-)
+// Socket is the tmux server name; OPTIMUS_SOCKET selects another server
+// (e.g. to keep a demo or test apart from your real agents).
+var Socket = socketName()
+
+const Session = "optimus"
+
+func socketName() string {
+	if s := os.Getenv("OPTIMUS_SOCKET"); s != "" {
+		return s
+	}
+	return "optimus"
+}
 
 // Window is one agent pane managed by optimus.
 type Window struct {
@@ -83,8 +91,9 @@ set -g history-limit 50000
 set -g escape-time 10
 set -g default-terminal "tmux-256color"
 set -ga terminal-overrides ",*256col*:Tc"
-set -g allow-passthrough on
-set -g extended-keys on
+# options newer than some distro tmux builds: -q ignores them where unknown
+set -gq allow-passthrough on
+set -gq extended-keys on
 set -g base-index 1
 set -g renumber-windows on
 set -g status-style "bg=#1e1e2e,fg=#cdd6f4"
@@ -269,6 +278,17 @@ func AttachCmd(id string) *exec.Cmd {
 	return cmd
 }
 
+// AttachCmdQuiet is AttachCmd for use from the dashboard: it erases the
+// "[detached (from session …)]" line tmux prints, so it doesn't pile up in the
+// terminal once the dashboard exits.
+func AttachCmdQuiet(id string) *exec.Cmd {
+	base := AttachCmd(id)
+	cmd := exec.Command("sh", append([]string{"-c", `"$@"; s=$?; printf '\033[1A\033[2K'; exit $s`, "sh"}, base.Args...)...)
+	cmd.Env = base.Env
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return cmd
+}
+
 // State guesses what an agent is doing from its screen.
 type State string
 
@@ -281,7 +301,7 @@ const (
 
 var (
 	busyRe    = regexp.MustCompile(`(?i)(esc to interrupt|esc to cancel|ctrl\+c to interrupt|working\.\.\.|thinking…|running…)`)
-	waitingRe = regexp.MustCompile(`(?i)(do you want to (proceed|make|create|run|allow|apply|edit)|❯ 1\. yes|allow once|\(y/n\)|\[y/n\]|waiting for (your )?(input|approval))`)
+	waitingRe = regexp.MustCompile(`(?i)(do you want to (proceed|make|create|run|allow|apply|edit)|allow command\?|would you like to run|[❯›] 1\. yes|allow once|\(y/n\)|\[y/n\]|waiting for (your )?(input|approval))`)
 )
 
 func Detect(w Window, screen string) State {

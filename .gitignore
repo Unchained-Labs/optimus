@@ -2,3 +2,5 @@
 /dist/
 *.test
 *.out
+/demo/.home/
+__pycache__/

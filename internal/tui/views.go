@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/wardn/optimus/internal/format"
 	"github.com/wardn/optimus/internal/model"
@@ -67,11 +68,31 @@ func (m *Model) View() string {
 	return screen
 }
 
-// overlay centers a box over the screen (the screen is replaced; terminals
-// don't composite, and a dimmed backdrop keeps context).
+// overlay draws box centered on top of screen, keeping the screen visible
+// around it.
 func overlay(screen, box string, w, h int) string {
-	_ = screen
-	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box, lipgloss.WithWhitespaceChars(" "))
+	bg := strings.Split(screen, "\n")
+	for len(bg) < h {
+		bg = append(bg, "")
+	}
+	fg := strings.Split(box, "\n")
+	bw := lipgloss.Width(box)
+	x := max((w-bw)/2, 0)
+	y := max((h-len(fg))/2, 0)
+	for i, line := range fg {
+		row := y + i
+		if row >= len(bg) {
+			break
+		}
+		base := bg[row]
+		if pad := x + bw - lipgloss.Width(base); pad > 0 {
+			base += strings.Repeat(" ", pad)
+		}
+		left := ansi.Cut(base, 0, x)
+		right := ansi.Cut(base, x+bw, max(w, x+bw))
+		bg[row] = sDim.Render(ansi.Strip(left)) + line + sDim.Render(ansi.Strip(right))
+	}
+	return strings.Join(bg[:h], "\n")
 }
 
 func (m *Model) viewHeader() string {
@@ -387,7 +408,7 @@ func (m *Model) viewUsage() string {
 			pct, reset = 0, "reset"
 		}
 		label := cell(w.Agent+" "+w.Name, 16)
-		L = append(L, label+bar(pct/100, colW-36, pctColor(pct/100))+fmt.Sprintf(" %3.0f%% left %3.0f%%  ", pct, 100-pct)+sDim.Render(reset))
+		L = append(L, label+bar(pct/100, colW-36, pctColor(pct/100))+fmt.Sprintf(" %3.0f%% used ", pct)+sDim.Render(reset))
 	}
 	L = append(L, "")
 
@@ -546,7 +567,8 @@ func renderTranscript(s *model.Session, msgs []model.Message, width int) string 
 				if t.Edit {
 					icon = "✎"
 				}
-				b.WriteString(sDim.Render(model.Truncate(fmt.Sprintf("  %s %s %s", icon, t.Name, t.Target), width)) + "\n")
+				target := strings.TrimPrefix(t.Target, s.Cwd+"/")
+				b.WriteString(sDim.Render(model.Truncate(fmt.Sprintf("  %s %s %s", icon, t.Name, shortHome(target)), width)) + "\n")
 			}
 			b.WriteString("\n")
 		}
