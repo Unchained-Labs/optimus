@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/wardn/optimus/internal/config"
@@ -51,8 +53,33 @@ func (a *App) provider(agent string) (providers.Provider, string, []string, erro
 	return p, bin, extra, nil
 }
 
+// LaunchRequest describes a new session. Zero values mean "use the config".
+type LaunchRequest struct {
+	Agent         string `json:"agent"`
+	Dir           string `json:"dir"`
+	Prompt        string `json:"prompt"`
+	Name          string `json:"name"`
+	RemoteControl *bool  `json:"remote_control,omitempty"`
+}
+
+func (a *App) opts(name string, rc *bool) providers.LaunchOpts {
+	o := providers.LaunchOpts{Name: name, RemoteControl: a.Cfg.ClaudeRemoteControl()}
+	if rc != nil {
+		o.RemoteControl = *rc
+	}
+	return o
+}
+
 // Launch starts a new agent session in the multiplexer.
 func (a *App) Launch(agent, dir, prompt, name string) (string, error) {
+	return a.LaunchWith(LaunchRequest{Agent: agent, Dir: dir, Prompt: prompt, Name: name})
+}
+
+func (a *App) LaunchWith(r LaunchRequest) (string, error) {
+	agent, dir, prompt, name := r.Agent, r.Dir, r.Prompt, r.Name
+	if agent == "" {
+		agent = a.Cfg.Agent()
+	}
 	p, bin, extra, err := a.provider(agent)
 	if err != nil {
 		return "", err
@@ -68,14 +95,16 @@ func (a *App) Launch(agent, dir, prompt, name string) (string, error) {
 	if !providers.AcceptsPrompt(p) {
 		argPrompt = ""
 	}
-	argv := append(append([]string{bin}, extra...), p.NewArgs(argPrompt, sid)...)
 	if name == "" {
 		name = agent + "-" + model.ProjectName(dir)
 	}
+	name = mux.Sanitize(name)
+	argv := append(append([]string{bin}, extra...), p.NewArgs(argPrompt, sid, a.opts(name, r.RemoteControl))...)
 	id, err := mux.Spawn(name, agent, dir, sid, argv)
 	if err != nil {
 		return "", err
 	}
+	a.EnsureWeb()
 	if prompt != "" && argPrompt == "" {
 		// agent can't take a prompt on argv: type it once its UI is up
 		time.Sleep(3 * time.Second)
@@ -100,7 +129,8 @@ func (a *App) Resume(s *model.Session) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ra := p.ResumeArgs(s.ID)
+	name := mux.Sanitize(s.Agent + "-" + s.ShortID())
+	ra := p.ResumeArgs(s.ID, a.opts(name, nil))
 	if ra == nil {
 		return "", fmt.Errorf("%s does not support resuming sessions", s.Agent)
 	}
@@ -109,7 +139,58 @@ func (a *App) Resume(s *model.Session) (string, error) {
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 		dir, _ = os.Getwd()
 	}
-	return mux.Spawn(s.Agent+"-"+s.ShortID(), s.Agent, dir, s.ID, argv)
+	id, err := mux.Spawn(name, s.Agent, dir, s.ID, argv)
+	if err == nil {
+		a.EnsureWeb()
+	}
+	return id, err
+}
+
+// WebRunning reports whether the web dashboard answers on its address.
+func (a *App) WebRunning() bool {
+	c := http.Client{Timeout: 400 * time.Millisecond}
+	resp, err := c.Get("http://" + a.Cfg.WebAddr() + "/healthz")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
+// WebURL is the dashboard address including the access token.
+func (a *App) WebURL() string {
+	tok, _ := config.WebToken()
+	host := a.Cfg.WebAddr()
+	if strings.HasPrefix(host, "0.0.0.0:") || strings.HasPrefix(host, ":") {
+		host = "127.0.0.1:" + host[strings.LastIndex(host, ":")+1:]
+	}
+	return "http://" + host + "/?token=" + tok
+}
+
+// EnsureWeb starts the web dashboard in the background when autostart is on
+// and it isn't already running. It returns whether the dashboard is up.
+func (a *App) EnsureWeb() bool {
+	if a.WebRunning() {
+		return true
+	}
+	if !a.Cfg.WebAutostart() || !mux.Available() {
+		return false
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	home, _ := os.UserHomeDir()
+	if err := mux.StartService("web", home, []string{self, "web", "--addr", a.Cfg.WebAddr()}); err != nil {
+		return false
+	}
+	for i := 0; i < 20; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if a.WebRunning() {
+			return true
+		}
+	}
+	return false
 }
 
 // HandoffDoc builds (and optionally condenses) a handoff document for a

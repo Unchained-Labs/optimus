@@ -298,14 +298,14 @@ func codexToolCall(it codexItem) model.ToolCall {
 	return model.ToolCall{Name: name}
 }
 
-func (Codex) NewArgs(prompt, _ string) []string {
+func (Codex) NewArgs(prompt, _ string, _ LaunchOpts) []string {
 	if prompt == "" {
 		return nil
 	}
 	return []string{prompt}
 }
 
-func (Codex) ResumeArgs(id string) []string { return []string{"resume", id} }
+func (Codex) ResumeArgs(id string, _ LaunchOpts) []string { return []string{"resume", id} }
 
 // LatestRateLimits returns the rate_limits object from the most recent
 // token_count event of the newest rollout, if any.

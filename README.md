@@ -2,7 +2,7 @@
 
 ![optimus demo](demo/optimus.gif)
 
-**The tmux of AI coding agents.** One terminal dashboard to run, watch and switch between Claude Code, Codex, opencode and friends; see what they cost and how much quota is left; and carry context from one session to another, even across agents.
+**The tmux of AI coding agents.** Run, watch and switch between Claude Code, Codex, opencode and friends — from a terminal dashboard **or your browser and phone**; see what they cost and how much quota is left; and carry context from one session to another, even across agents.
 
 ```
  OPTIMUS  1 Agents (3)  2 Sessions  3 Projects  4 Usage        today $9.02 · block $9.02 ↻1h27m · claude 5h 62%
@@ -17,6 +17,9 @@
 
 | | |
 |---|---|
+| **Terminal or browser** | `optimus` opens the terminal dashboard; `optimus web` serves the same fleet in a browser, with a live, interactive terminal for every agent, a message box, and one-tap keys (Esc, ↵, 1/2/3, y/n, ^C) for answering prompts from a phone. Both drive the same tmux server, so you can start on the laptop and approve from the couch. |
+| **Remote control by default** | Every session optimus starts or resumes brings up the web dashboard in the background, and Claude sessions launch with Claude Code's own `--remote-control`, so they also appear in the Claude apps. Both are switchable in the config. |
+| **One keystroke to a new session** | `optimus claude`, `optimus codex`, … start that agent in the current folder and attach. `N` in the TUI starts your default agent in the project you're looking at; `n` lets you pick agent and folder. In the browser: **＋ New session** (or `n`) with agent, project, first message and Remote Control toggle, plus one-click quick start per recent project. |
 | **Multiplexer** | Starts agents in a private tmux server (`tmux -L optimus`), so they keep running after you quit. Live preview of every pane, with a busy / waiting-for-input / idle badge. Attach with `enter`, return with `Alt-q`, cycle agents with `Alt-←/→`. Send a prompt to one agent, or broadcast it to several. |
 | **Sessions** | Every past session of every agent, newest first, searchable, with turns, tokens and cost. Read transcripts, resume any session into the multiplexer. |
 | **Context transfer** | `h` on any session builds a handoff document (original request, files changed and read, recent commands, the latest conversation within a token budget, and where it left off). You can start a new agent with it (any agent: Claude to Codex works), paste it into a running agent, copy it, or save it. `H` first condenses it with an agent. |
@@ -59,12 +62,24 @@ Claude Code gives rate-limit data (5h and 7d windows) only to status line comman
 
 That also gives you a compact status line: `◆ Opus 5.5 · api · session $4.50 · 5h ███░░ 62% ↻1h23m · 7d █░░░░ 18%`. Already have a status line? Keep it by setting `"statusline_chain": "<your command>"` in the optimus config. Optimus still records the data and prints your line. Codex quota is read straight from its session logs, so it needs no setup.
 
+## Browser & phone
+
+```sh
+optimus web --open                 # foreground; or --bg to keep it running in the background
+optimus web --url                  # print the login link (contains your access token)
+optimus web --addr 0.0.0.0:7777    # reachable from other devices (see below)
+```
+
+The dashboard listens on `127.0.0.1:7777` and every API call and terminal needs the access token from `optimus web --url` (stored in `~/.local/state/optimus/web-token`; delete the file to rotate it). Opening the link once sets a cookie. To use it from your phone, put both devices on a private network such as Tailscale and listen on that interface (`--addr 100.x.y.z:7777`) or on `0.0.0.0`. Anyone with the token can type into your agents, so don't expose the port to the internet.
+
 ## CLI
 
 Everything in the dashboard is also scriptable:
 
 ```sh
-optimus new claude ~/dev/api --attach           # start an agent (Alt-q to detach)
+optimus claude                                  # start Claude here and attach (Alt-q to detach)
+optimus codex ~/dev/web -p "fix the login test" # any agent, any folder, first message
+optimus new                                     # your default agent, in the background
 optimus ps                                      # running agents + state
 optimus send all "run the tests and report"     # broadcast a prompt
 optimus peek 2 -n 30                            # look at an agent's screen
@@ -87,6 +102,8 @@ optimus projects
 
 ```json
 {
+  "default_agent": "claude",
+  "remote": { "claude_remote_control": true, "web_autostart": true, "addr": "127.0.0.1:7777" },
   "budgets": { "daily_usd": 50, "weekly_usd": 250, "monthly_usd": 800, "block_usd": 30 },
   "block_hours": 5,
   "handoff_max_tokens": 20000,
@@ -107,6 +124,7 @@ optimus projects
 
 - **Index**: each provider parses its agent's transcripts into sessions with per-hour, per-model token buckets. Results are cached in `~/.cache/optimus/index.gob`, keyed by file size and mtime, so only changed sessions are re-read. `optimus reindex` rebuilds the cache.
 - **Multiplexer**: a dedicated tmux server with its own config (`~/.config/optimus/tmux.conf`, generated). Windows carry `@optimus_agent`, `@optimus_cwd` and `@optimus_session` options. Claude sessions get a pre-assigned `--session-id`, so optimus always knows which transcript belongs to which window. The agent state badge is a heuristic based on the bottom of the pane.
+- **Browser terminals**: each open terminal is a private tmux session grouped with the agents' session, so it has its own current window and size, attached through a pty and bridged to xterm.js over a websocket. It is removed when the tab closes; the agent keeps running.
 - **Handoff**: documents are saved in `~/.local/state/optimus/handoffs/`. The receiving agent gets a one-line prompt telling it to read the file. That avoids argv and paste-size limits and works with every agent.
 
 ## Demo
@@ -124,5 +142,6 @@ internal/ratelimits  quota windows (Claude status line, Codex rollouts)
 internal/mux         tmux backend
 internal/handoff     context documents
 internal/tui         Bubble Tea dashboard
+internal/web         browser dashboard: JSON API, token auth, xterm.js terminals over websockets
 internal/cli         subcommands
 ```

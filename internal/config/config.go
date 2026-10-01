@@ -2,6 +2,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -30,7 +32,22 @@ type Agent struct {
 	Args    []string `json:"args,omitempty"` // extra args for every launch
 }
 
+// Remote controls how sessions can be driven from elsewhere: Claude Code's
+// own Remote Control, and the optimus web dashboard.
+type Remote struct {
+	// ClaudeRemoteControl starts every Claude session optimus launches with
+	// --remote-control (default on).
+	ClaudeRemoteControl *bool `json:"claude_remote_control,omitempty"`
+	// WebAutostart starts the web dashboard whenever optimus launches or
+	// resumes a session (default on).
+	WebAutostart *bool `json:"web_autostart,omitempty"`
+	// Addr is where the web dashboard listens (default 127.0.0.1:7777).
+	Addr string `json:"addr,omitempty"`
+}
+
 type Config struct {
+	DefaultAgent    string           `json:"default_agent,omitempty"`
+	Remote          Remote           `json:"remote"`
 	Budgets         Budgets          `json:"budgets"`
 	BlockHours      int              `json:"block_hours,omitempty"`
 	Pricing         map[string]Price `json:"pricing,omitempty"` // keyed by model-id prefix
@@ -41,8 +58,32 @@ type Config struct {
 }
 
 func Default() Config {
-	return Config{BlockHours: 5, HandoffTokens: 20000, SummarizeWith: "claude"}
+	return Config{BlockHours: 5, HandoffTokens: 20000, SummarizeWith: "claude", DefaultAgent: "claude"}
 }
+
+func (c Config) ClaudeRemoteControl() bool {
+	return c.Remote.ClaudeRemoteControl == nil || *c.Remote.ClaudeRemoteControl
+}
+
+func (c Config) WebAutostart() bool {
+	return c.Remote.WebAutostart == nil || *c.Remote.WebAutostart
+}
+
+func (c Config) WebAddr() string {
+	if c.Remote.Addr != "" {
+		return c.Remote.Addr
+	}
+	return "127.0.0.1:7777"
+}
+
+func (c Config) Agent() string {
+	if c.DefaultAgent != "" {
+		return c.DefaultAgent
+	}
+	return "claude"
+}
+
+func Bool(b bool) *bool { return &b }
 
 func home() string {
 	h, _ := os.UserHomeDir()
@@ -78,6 +119,7 @@ func CacheDir() string {
 }
 
 func Path() string          { return filepath.Join(Dir(), "config.json") }
+func WebTokenFile() string  { return filepath.Join(StateDir(), "web-token") }
 func HandoffDir() string    { return filepath.Join(StateDir(), "handoffs") }
 func RateLimitFile() string { return filepath.Join(StateDir(), "ratelimits.json") }
 
@@ -119,4 +161,20 @@ func Save(c Config) error {
 		return err
 	}
 	return os.WriteFile(Path(), append(b, '\n'), 0o644)
+}
+
+// WebToken returns the web dashboard's access token, creating it on first use.
+func WebToken() (string, error) {
+	if b, err := os.ReadFile(WebTokenFile()); err == nil && len(b) >= 32 {
+		return string(b[:32]), nil
+	}
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	tok := hex.EncodeToString(buf)
+	if err := os.MkdirAll(StateDir(), 0o700); err != nil {
+		return "", err
+	}
+	return tok, os.WriteFile(WebTokenFile(), []byte(tok), 0o600)
 }

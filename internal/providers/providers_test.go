@@ -157,3 +157,23 @@ func TestOpenCode(t *testing.T) {
 		t.Errorf("transcript: %+v", msgs)
 	}
 }
+
+func TestClaudeLaunchArgs(t *testing.T) {
+	c := Claude{}
+	got := strings.Join(c.NewArgs("fix it", "sid", LaunchOpts{Name: "api", RemoteControl: true}), " ")
+	if got != "--session-id sid --name=api --remote-control=api fix it" {
+		t.Errorf("new: %q", got)
+	}
+	// unnamed remote control must not swallow the prompt
+	got = strings.Join(c.NewArgs("fix it", "", LaunchOpts{RemoteControl: true}), " ")
+	if got != "--remote-control -- fix it" {
+		t.Errorf("unnamed: %q", got)
+	}
+	got = strings.Join(c.ResumeArgs("abc", LaunchOpts{Name: "api", RemoteControl: true}), " ")
+	if got != "--resume abc --name=api --remote-control=api" {
+		t.Errorf("resume: %q", got)
+	}
+	if a := c.NewArgs("", "", LaunchOpts{}); len(a) != 0 {
+		t.Errorf("bare: %v", a)
+	}
+}

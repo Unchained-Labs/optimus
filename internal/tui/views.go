@@ -125,6 +125,9 @@ func (m *Model) viewHeader() string {
 		st := lipgloss.NewStyle().Foreground(pctColor(w.UsedPct / 100))
 		right = append(right, sDim.Render(w.Agent+" "+w.Name+" ")+st.Render(fmt.Sprintf("%.0f%%", w.UsedPct)))
 	}
+	if m.webUp {
+		right = append(right, lipgloss.NewStyle().Foreground(cGreen).Render("◉ web"))
+	}
 	if m.loading {
 		right = append(right, sDim.Render("indexing…"))
 	}
@@ -157,7 +160,7 @@ func (m *Model) viewFooter() string {
 	case tabUsage:
 		keys = [][2]string{{"R", "reload"}}
 	}
-	keys = append(keys, [2]string{"tab", "switch"}, [2]string{"?", "help"}, [2]string{"q", "quit"})
+	keys = append(keys, [2]string{"N", "quick " + m.app.Cfg.Agent()}, [2]string{"w", "web"}, [2]string{"?", "help"}, [2]string{"q", "quit"})
 	var parts []string
 	for _, k := range keys {
 		parts = append(parts, sKey.Render(k[0])+" "+sDim.Render(k[1]))
@@ -518,7 +521,7 @@ func (m *Model) viewHelp() string {
 		title string
 		keys  [][2]string
 	}{
-		{"Everywhere", [][2]string{{"1-4 / tab", "switch view"}, {"j k ↑ ↓", "move"}, {"n", "start a new agent"}, {"R", "rescan sessions"}, {"q", "quit (agents keep running)"}}},
+		{"Everywhere", [][2]string{{"1-4 / tab", "switch view"}, {"j k ↑ ↓", "move"}, {"n", "start an agent (pick which and where)"}, {"N", "start your default agent in this project, now"}, {"w", "open the web dashboard (phone/browser remote)"}, {"R", "rescan sessions"}, {"q", "quit (agents keep running)"}}},
 		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles agents"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
 		{"Sessions", [][2]string{{"enter", "read transcript"}, {"r", "resume in the multiplexer"}, {"h", "hand off context to a new agent, a running one, clipboard or file"}, {"H", "same, condensed by an agent first"}, {"y", "copy handoff to clipboard"}, {"/ a p esc", "filter text / agent / project / clear"}}},
 		{"Projects", [][2]string{{"enter", "sessions of this project"}, {"c", "start an agent here"}}},

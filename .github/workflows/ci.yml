@@ -21,6 +21,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: tmux (for the multiplexer and browser-terminal tests)
+        run: if [ "$RUNNER_OS" = macOS ]; then brew install tmux; else sudo apt-get install -y tmux; fi
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: vet

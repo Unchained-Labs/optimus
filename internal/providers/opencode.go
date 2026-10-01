@@ -221,11 +221,11 @@ func (o OpenCode) Transcript(s *model.Session) ([]model.Message, error) {
 	return out, nil
 }
 
-func (OpenCode) NewArgs(prompt, _ string) []string {
+func (OpenCode) NewArgs(prompt, _ string, _ LaunchOpts) []string {
 	if prompt == "" {
 		return nil
 	}
 	return []string{"--prompt", prompt}
 }
 
-func (OpenCode) ResumeArgs(id string) []string { return []string{"--session", id} }
+func (OpenCode) ResumeArgs(id string, _ LaunchOpts) []string { return []string{"--session", id} }

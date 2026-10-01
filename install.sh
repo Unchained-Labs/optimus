@@ -237,11 +237,15 @@ esac
 
 if [ "$SETUP" = 1 ]; then
   step "Your agents"
-  found=0
+  found=0; first=''
   for a in claude codex opencode gemini cursor-agent aider amp crush goose; do
-    if have "$a"; then ok "$a"; found=$((found + 1)); fi
+    if have "$a"; then ok "$a"; found=$((found + 1)); [ -n "$first" ] || first=$a; fi
   done
   [ "$found" -gt 0 ] || warn "no coding agents found on PATH yet (claude, codex, opencode, …)"
+  if [ "$found" -gt 0 ]; then
+    ask "Default agent for new sessions (optimus new, N in the dashboard)" "$first"
+    if "$OPT" config set default_agent "$REPLY" >/dev/null 2>&1; then ok "default agent: $REPLY"; fi
+  fi
 
   if have claude || [ -d "$HOME/.claude" ]; then
     step "Remaining quota"
@@ -267,6 +271,17 @@ if [ "$SETUP" = 1 ]; then
     fi
   done
 
+  step "Remote control"
+  info "Every session optimus starts also opens the web dashboard (live terminals,"
+  info "works from your phone) and Claude sessions get Claude's own Remote Control."
+  if [ -z "$TTY" ] || confirm "Keep both on?" y; then
+    ok "on — dashboard: optimus web --url"
+  else
+    "$OPT" config set remote.web_autostart false >/dev/null
+    "$OPT" config set remote.claude_remote_control false >/dev/null
+    ok "off — start the dashboard any time with: optimus web"
+  fi
+
   step "Indexing your sessions"
   n=$("$OPT" reindex 2>/dev/null | awk '{print $2}')
   ok "${n:-0} sessions indexed"
@@ -279,7 +294,8 @@ fi
 
 printf '\n%s%s✓ optimus is ready.%s\n\n' "$B" "$GRN" "$R"
 say "  ${B}optimus${R}                    open the dashboard"
-say "  ${B}optimus new claude .${R}       start an agent here (Alt-q to come back)"
+say "  ${B}optimus claude${R}             start an agent here (Alt-q to come back)"
+say "  ${B}optimus web --open${R}         the same fleet in your browser / phone"
 say "  ${B}optimus usage${R}              what you spent"
 say "  ${B}optimus help${R}               everything else"
 say ""
