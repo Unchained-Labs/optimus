@@ -37,16 +37,20 @@ Run `optimus agents` to see what's detected. Override a binary or add default ar
 
 ## Install
 
-Requires Go 1.25+ and tmux.
-
 ```sh
-make install          # → ~/.local/bin/optimus
-optimus               # open the dashboard
+curl -fsSL https://raw.githubusercontent.com/wardn/optimus/main/install.sh | sh
 ```
+
+A short wizard checks for tmux, installs the binary (a checksum-verified release, or built from source with Go if no release exists), adds it to your `PATH`, detects your agents, offers to hook up the Claude Code status line for real quota numbers, and asks for optional budgets. Nothing in your config files changes unless you say yes.
+
+From a checkout: `sh install.sh` (builds that checkout) or `make install`.
+Unattended: `curl -fsSL …/install.sh | sh -s -- --yes [--statusline] [--bin-dir DIR] [--version v0.2.0]`.
+
+Requires tmux for the multiplexer (sessions and usage work without it), and Go 1.25+ only when building from source.
 
 ### Show real remaining quota (Claude plans)
 
-Claude Code gives rate-limit data (5h and 7d windows) only to status line commands. Make optimus your status line and it records every snapshot:
+Claude Code gives rate-limit data (5h and 7d windows) only to status line commands. The installer offers to set this up; `optimus config statusline --install` does the same any time (it backs up `settings.json` and keeps an existing status line working). By hand:
 
 ```jsonc
 // ~/.claude/settings.json
@@ -79,7 +83,7 @@ optimus projects
 
 ## Config
 
-`~/.config/optimus/config.json` (`optimus config init` / `optimus config edit`):
+`~/.config/optimus/config.json` (`optimus config edit`, or `optimus config set budgets.daily_usd 50`):
 
 ```json
 {
