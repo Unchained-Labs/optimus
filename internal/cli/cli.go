@@ -34,7 +34,8 @@ Usage:
   optimus                         open the dashboard (TUI)
 
  Multiplexer
-  optimus new <agent> [dir]       start an agent in the optimus tmux server
+  optimus claude|codex|… [dir]    start that agent here and attach  (-p PROMPT, -d to stay detached)
+  optimus new [agent] [dir]       start an agent (default: config default_agent)
         --name N --prompt P --attach
   optimus ps                      list running agents (optimus windows + other live sessions)
   optimus attach [window]         attach to a window (Alt-q to come back)
@@ -42,6 +43,10 @@ Usage:
   optimus send <window|all> TEXT  type a prompt into one or all agents  (--no-enter)
   optimus kill <window>           stop an agent window
   optimus resume <session>        reopen a past session in the multiplexer (--attach)
+
+ Remote
+  optimus web                     browser dashboard with live terminals  (--bg, --open, --url, --stop,
+                                  --addr 0.0.0.0:7777 for phone/LAN)
 
  Sessions & context
   optimus ls                      list sessions  (-a agent -p project -n 30 --live --json)
@@ -106,6 +111,8 @@ func Run(args []string) int {
 		err = cmdHandoff(a, rest)
 	case "statusline":
 		err = cmdStatusline(a)
+	case "web", "serve", "ui-web":
+		err = cmdWeb(a, rest)
 	case "agents", "doctor":
 		err = cmdAgents(a)
 	case "config":
@@ -119,6 +126,10 @@ func Run(args []string) int {
 	case "help", "--help", "-h":
 		fmt.Print(Usage)
 	default:
+		if providers.Get(cmd) != nil {
+			err = cmdAgentShortcut(a, cmd, rest)
+			break
+		}
 		fmt.Fprintf(os.Stderr, "optimus: unknown command %q\n\n%s", cmd, Usage)
 		return 2
 	}
@@ -511,8 +522,9 @@ func cmdNew(a *app.App, args []string) error {
 	prompt := fs.String("prompt", "", "initial prompt")
 	attach := fs.Bool("attach", false, "attach after starting")
 	pos := parse(fs, args)
-	if len(pos) == 0 {
-		return fmt.Errorf("usage: optimus new <agent> [dir]   (agents: %s)", strings.Join(providers.Names(), ", "))
+	// `optimus new`, `optimus new ~/dir` and `optimus new codex ~/dir` all work
+	if len(pos) == 0 || providers.Get(pos[0]) == nil {
+		pos = append([]string{a.Cfg.Agent()}, pos...)
 	}
 	dir := ""
 	if len(pos) > 1 {

@@ -249,6 +249,7 @@ write(os.path.join(HOME, ".claude", "sessions", "1.json"),
 agent = os.path.join(HERE, "fake-agent.py")
 cfg = {
     "budgets": {"daily_usd": 40, "weekly_usd": 250, "monthly_usd": 900},
+    "remote": {"addr": "127.0.0.1:7788"},
     "agents": {name: {"command": os.path.join(HOME, ".bin", name)} for name in ("claude", "codex", "opencode")},
 }
 write(os.path.join(HOME, ".config", "optimus", "config.json"), json.dumps(cfg, indent=2))

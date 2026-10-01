@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1e2e">
+<title>Optimus</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f38ba8'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='20' font-weight='700' text-anchor='middle' fill='%231e1e2e'%3EO%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/vendor/xterm.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">OPTIMUS</div>
+  <nav class="tabs" id="tabs">
+    <button data-view="fleet" class="on">Fleet <span class="count" id="fleet-count"></span></button>
+    <button data-view="sessions">Sessions</button>
+    <button data-view="usage">Usage</button>
+  </nav>
+  <div class="meters" id="meters"></div>
+  <button class="primary" id="new-btn" title="New session (n)">＋ New session</button>
+</header>
+
+<main>
+  <!-- FLEET -->
+  <section class="view on" id="view-fleet">
+    <aside class="fleet-side">
+      <div class="side-head">Running <span class="dim" id="running-sum"></span></div>
+      <div id="windows" class="windows"></div>
+      <div id="outside-wrap" hidden>
+        <div class="side-head">Outside optimus</div>
+        <div id="outside" class="outside"></div>
+      </div>
+      <div class="side-head">Quick start</div>
+      <div id="quick" class="quick"></div>
+    </aside>
+    <div class="fleet-main">
+      <div id="empty" class="empty" hidden>
+        <h1>Your agent fleet</h1>
+        <p>Start a coding agent in any project. It keeps running in optimus's tmux server; drive it from here, from your phone, or from the terminal with <code>optimus</code>.</p>
+        <div id="empty-agents" class="agent-cards"></div>
+      </div>
+      <div id="pane" class="pane" hidden>
+        <div class="pane-bar">
+          <div class="pane-title">
+            <span id="pane-state" class="state"></span>
+            <strong id="pane-name"></strong>
+            <span id="pane-agent" class="chip"></span>
+            <span id="pane-cwd" class="dim mono"></span>
+          </div>
+          <div class="pane-actions">
+            <button id="act-transcript" title="Transcript">Transcript</button>
+            <button id="act-handoff" title="Hand off this session's context">Handoff</button>
+            <button id="act-rename">Rename</button>
+            <button id="act-kill" class="danger">Stop</button>
+          </div>
+        </div>
+        <div id="term" class="term"></div>
+        <div class="keys" id="keys"></div>
+        <form class="prompt" id="prompt-form" autocomplete="off">
+          <textarea id="prompt" rows="1" placeholder="Message this agent…  (Enter to send, Shift+Enter for a new line)"></textarea>
+          <label class="bcast" title="Send to every running agent"><input type="checkbox" id="broadcast"> all</label>
+          <button class="primary" type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- SESSIONS -->
+  <section class="view" id="view-sessions">
+    <div class="toolbar">
+      <input type="search" id="s-q" placeholder="Search title, project, model, id…">
+      <select id="s-agent"><option value="">All agents</option></select>
+      <select id="s-project"><option value="">All projects</option></select>
+      <span class="dim" id="s-sum"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="sessions">
+        <thead><tr><th></th><th>Agent</th><th>When</th><th>Project</th><th>Title</th><th class="r">Turns</th><th class="r">Tokens</th><th class="r">Cost</th><th></th></tr></thead>
+        <tbody id="s-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- USAGE -->
+  <section class="view" id="view-usage">
+    <div class="cards" id="u-cards"></div>
+    <div class="grid2">
+      <div class="panel"><h3>Remaining</h3><div id="u-limits"></div><h3>Current 5h block</h3><div id="u-block"></div><h3>Budgets</h3><div id="u-budgets"></div></div>
+      <div class="panel"><h3>Last 30 days</h3><div id="u-chart" class="chart"></div></div>
+      <div class="panel"><h3>By model</h3><div id="u-model"></div></div>
+      <div class="panel"><h3>By agent</h3><div id="u-agent"></div><h3>By project</h3><div id="u-project"></div></div>
+    </div>
+    <p class="dim note">Costs are API list-price equivalents. On a Claude or ChatGPT plan they show value consumed, not money billed.</p>
+  </section>
+</main>
+
+<nav class="bottom-nav" id="bottom-nav">
+  <button data-view="fleet" class="on">Fleet</button>
+  <button data-view="sessions">Sessions</button>
+  <button data-view="usage">Usage</button>
+</nav>
+
+<!-- dialogs -->
+<dialog id="dlg-new" class="dlg">
+  <form method="dialog" id="new-form">
+    <h2>New session</h2>
+    <label class="lbl">Agent</label>
+    <div class="agent-pick" id="new-agents"></div>
+    <label class="lbl" for="new-dir">Project</label>
+    <input id="new-dir" list="new-dirs" placeholder="~/dev/my-project" required>
+    <datalist id="new-dirs"></datalist>
+    <div class="recent" id="new-recent"></div>
+    <label class="lbl" for="new-prompt">First message <span class="dim">(optional)</span></label>
+    <textarea id="new-prompt" rows="3" placeholder="What should it work on?"></textarea>
+    <div class="row">
+      <div class="grow"><label class="lbl" for="new-name">Name <span class="dim">(optional)</span></label><input id="new-name" placeholder="auto"></div>
+    </div>
+    <label class="toggle" id="new-rc-wrap"><input type="checkbox" id="new-rc"> Claude Remote Control <span class="dim">— also reachable from the Claude apps</span></label>
+    <div class="dlg-actions">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button class="primary" id="new-go" value="go">Start <kbd>Ctrl ↵</kbd></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-handoff" class="dlg">
+  <form method="dialog" id="handoff-form">
+    <h2>Hand off context</h2>
+    <p class="dim" id="handoff-what"></p>
+    <div class="targets" id="handoff-targets"></div>
+    <label class="lbl" for="handoff-note">Note for the next agent <span class="dim">(optional)</span></label>
+    <textarea id="handoff-note" rows="2" placeholder="e.g. focus on the failing test"></textarea>
+    <label class="toggle"><input type="checkbox" id="handoff-sum"> Condense with an agent first <span class="dim">(uses tokens)</span></label>
+    <div class="dlg-actions"><button value="cancel">Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-transcript" class="dlg wide">
+  <div class="tr-head">
+    <div><h2 id="tr-title"></h2><div class="dim" id="tr-meta"></div></div>
+    <div class="tr-actions"><button id="tr-resume">Resume</button><button id="tr-handoff">Handoff</button><button id="tr-close">Close</button></div>
+  </div>
+  <div class="tr-body" id="tr-body"></div>
+</dialog>
+
+<dialog id="dlg-login" class="dlg">
+  <form id="login-form">
+    <h2>Connect to optimus</h2>
+    <p class="dim">Open the link printed by <code>optimus web --url</code>, or paste its token.</p>
+    <input id="login-token" placeholder="token" autocomplete="off" required>
+    <div class="dlg-actions"><button class="primary">Connect</button></div>
+  </form>
+</dialog>
+
+<div id="toasts" class="toasts"></div>
+
+<script src="/static/vendor/xterm.js"></script>
+<script src="/static/vendor/addon-fit.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

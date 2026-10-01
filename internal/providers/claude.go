@@ -345,18 +345,41 @@ func toolCall(name string, input json.RawMessage) model.ToolCall {
 	return tc
 }
 
-func (Claude) NewArgs(prompt, sessionID string) []string {
+// claudeOpts maps launch options to flags. Values are attached with "=" so an
+// optional-value flag like --remote-control never swallows the prompt.
+func claudeOpts(o LaunchOpts) []string {
+	var a []string
+	if o.Name != "" {
+		a = append(a, "--name="+o.Name)
+	}
+	if o.RemoteControl {
+		if o.Name != "" {
+			a = append(a, "--remote-control="+o.Name)
+		} else {
+			a = append(a, "--remote-control")
+		}
+	}
+	return a
+}
+
+func (Claude) NewArgs(prompt, sessionID string, o LaunchOpts) []string {
 	var a []string
 	if sessionID != "" {
 		a = append(a, "--session-id", sessionID)
 	}
+	a = append(a, claudeOpts(o)...)
 	if prompt != "" {
+		if o.RemoteControl && o.Name == "" {
+			a = append(a, "--") // keep the prompt out of --remote-control's optional value
+		}
 		a = append(a, prompt)
 	}
 	return a
 }
 
-func (Claude) ResumeArgs(id string) []string { return []string{"--resume", id} }
+func (Claude) ResumeArgs(id string, o LaunchOpts) []string {
+	return append([]string{"--resume", id}, claudeOpts(o)...)
+}
 
 // Live reads ~/.claude/sessions/<pid>.json, which Claude Code keeps for each
 // running interactive session.

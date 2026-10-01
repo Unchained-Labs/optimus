@@ -38,10 +38,17 @@ type Provider interface {
 	// NewArgs returns args to start a fresh session, optionally with an
 	// initial prompt. sessionID is a pre-assigned id the agent should use, if
 	// it supports that ("" otherwise).
-	NewArgs(prompt, sessionID string) []string
-	ResumeArgs(id string) []string
+	NewArgs(prompt, sessionID string, o LaunchOpts) []string
+	ResumeArgs(id string, o LaunchOpts) []string
 	// PresetID reports whether NewArgs honours a pre-assigned session id.
 	PresetID() bool
+}
+
+// LaunchOpts are agent-independent launch preferences; each provider maps
+// what it supports to flags.
+type LaunchOpts struct {
+	Name          string // display name for the session
+	RemoteControl bool   // make the session controllable from the agent's own apps
 }
 
 // LiveSession is a session the agent itself reports as running (outside of

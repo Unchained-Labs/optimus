@@ -5,6 +5,7 @@ package mux
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
@@ -168,6 +169,9 @@ func Spawn(name, agent, dir, sessionID string, argv []string) (string, error) {
 
 var unsafe = regexp.MustCompile(`[^A-Za-z0-9._+-]+`)
 
+// Sanitize makes s usable as a window name.
+func Sanitize(s string) string { return sanitize(s) }
+
 func sanitize(s string) string {
 	s = strings.Trim(unsafe.ReplaceAllString(s, "-"), "-")
 	if len(s) > 32 {
@@ -276,6 +280,94 @@ func AttachCmd(id string) *exec.Cmd {
 	cmd := tmux("attach-session", "-t", "="+Session)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd
+}
+
+// allowedKeys are the tmux key names remote clients may send (for phone-friendly
+// buttons: answering prompts, interrupting, navigating menus).
+var allowedKeys = map[string]bool{
+	"Enter": true, "Escape": true, "Tab": true, "BTab": true, "Up": true, "Down": true, "Left": true, "Right": true,
+	"C-c": true, "C-d": true, "C-l": true, "C-r": true, "C-o": true, "C-t": true, "Space": true, "BSpace": true,
+	"PageUp": true, "PageDown": true, "y": true, "n": true, "1": true, "2": true, "3": true,
+}
+
+// Keys sends named keys (see allowedKeys) to a window.
+func Keys(id string, keys ...string) error {
+	for _, k := range keys {
+		if !allowedKeys[k] {
+			return fmt.Errorf("key %q not allowed", k)
+		}
+	}
+	_, err := run(append([]string{"send-keys", "-t", id}, keys...)...)
+	return err
+}
+
+// ViewCmd prepares a private view of one window for a remote terminal: a
+// session grouped with the agents' session (so it shares the windows but has
+// its own current window), without a status bar, removed by the returned
+// cleanup func. The returned command attaches to it.
+func ViewCmd(windowID string) (*exec.Cmd, func(), error) {
+	var b [6]byte
+	_, _ = rand.Read(b[:])
+	view := fmt.Sprintf("view-%x", b)
+	if _, err := run("new-session", "-d", "-s", view, "-t", "="+Session); err != nil {
+		return nil, nil, err
+	}
+	// view names are random and unique, so plain targets are exact (tmux 3.2
+	// does not accept the "=" exact-match prefix everywhere)
+	cleanup := func() { _, _ = run("kill-session", "-t", view) }
+	if _, err := run("set-option", "-t", view, "status", "off"); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	if _, err := run("select-window", "-t", view+":"+windowID); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	cmd := tmux("attach-session", "-t", view)
+	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
+	return cmd, cleanup, nil
+}
+
+// SweepViews removes view sessions left behind by a crashed dashboard.
+func SweepViews() {
+	if !Running() {
+		return
+	}
+	out, err := run("list-sessions", "-F", "#{session_name} #{session_attached}")
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		f := strings.Fields(line)
+		if len(f) == 2 && strings.HasPrefix(f[0], "view-") && f[1] == "0" {
+			_, _ = run("kill-session", "-t", f[0])
+		}
+	}
+}
+
+// ServiceSession holds optimus's own background processes (the web
+// dashboard); it lives on the same tmux server but is never listed as an agent.
+const ServiceSession = "optimus-svc"
+
+// StartService (re)starts a named background process in the service session.
+func StartService(name, dir string, argv []string) error {
+	if err := ensureConf(); err != nil {
+		return err
+	}
+	_, _ = run("kill-window", "-t", ServiceSession+":"+name)
+	var args []string
+	if _, err := run("has-session", "-t", "="+ServiceSession); err == nil {
+		args = []string{"new-window", "-d", "-t", ServiceSession + ":", "-n", name, "-c", dir}
+	} else {
+		args = []string{"new-session", "-d", "-s", ServiceSession, "-n", name, "-c", dir}
+	}
+	_, err := run(append(append(args, "--"), argv...)...)
+	return err
+}
+
+func StopService(name string) error {
+	_, err := run("kill-window", "-t", ServiceSession+":"+name)
+	return err
 }
 
 // AttachCmdQuiet is AttachCmd for use from the dashboard: it erases the

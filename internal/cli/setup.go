@@ -15,14 +15,18 @@ import (
 
 // settable maps `optimus config set` keys to setters.
 var settable = map[string]func(c *config.Config, v string) error{
-	"budgets.daily_usd":   floatSetter(func(c *config.Config) *float64 { return &c.Budgets.DailyUSD }),
-	"budgets.weekly_usd":  floatSetter(func(c *config.Config) *float64 { return &c.Budgets.WeeklyUSD }),
-	"budgets.monthly_usd": floatSetter(func(c *config.Config) *float64 { return &c.Budgets.MonthlyUSD }),
-	"budgets.block_usd":   floatSetter(func(c *config.Config) *float64 { return &c.Budgets.BlockUSD }),
-	"block_hours":         intSetter(func(c *config.Config) *int { return &c.BlockHours }),
-	"handoff_max_tokens":  intSetter(func(c *config.Config) *int { return &c.HandoffTokens }),
-	"summarize_with":      func(c *config.Config, v string) error { c.SummarizeWith = v; return nil },
-	"statusline_chain":    func(c *config.Config, v string) error { c.StatuslineChain = v; return nil },
+	"budgets.daily_usd":            floatSetter(func(c *config.Config) *float64 { return &c.Budgets.DailyUSD }),
+	"budgets.weekly_usd":           floatSetter(func(c *config.Config) *float64 { return &c.Budgets.WeeklyUSD }),
+	"budgets.monthly_usd":          floatSetter(func(c *config.Config) *float64 { return &c.Budgets.MonthlyUSD }),
+	"budgets.block_usd":            floatSetter(func(c *config.Config) *float64 { return &c.Budgets.BlockUSD }),
+	"block_hours":                  intSetter(func(c *config.Config) *int { return &c.BlockHours }),
+	"handoff_max_tokens":           intSetter(func(c *config.Config) *int { return &c.HandoffTokens }),
+	"summarize_with":               func(c *config.Config, v string) error { c.SummarizeWith = v; return nil },
+	"statusline_chain":             func(c *config.Config, v string) error { c.StatuslineChain = v; return nil },
+	"default_agent":                func(c *config.Config, v string) error { c.DefaultAgent = v; return nil },
+	"remote.addr":                  func(c *config.Config, v string) error { c.Remote.Addr = v; return nil },
+	"remote.claude_remote_control": boolSetter(func(c *config.Config) **bool { return &c.Remote.ClaudeRemoteControl }),
+	"remote.web_autostart":         boolSetter(func(c *config.Config) **bool { return &c.Remote.WebAutostart }),
 }
 
 func settableKeys() []string {
@@ -41,6 +45,17 @@ func floatSetter(field func(*config.Config) *float64) func(*config.Config, strin
 			return fmt.Errorf("%q is not a non-negative number", v)
 		}
 		*field(c) = f
+		return nil
+	}
+}
+
+func boolSetter(field func(*config.Config) **bool) func(*config.Config, string) error {
+	return func(c *config.Config, v string) error {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("%q is not true/false", v)
+		}
+		*field(c) = config.Bool(b)
 		return nil
 	}
 }

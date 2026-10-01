@@ -36,7 +36,7 @@ func (Generic) Discover() ([]Source, error)                        { return nil,
 func (Generic) Parse(Source) (*model.Session, error)               { return nil, nil }
 func (Generic) Transcript(*model.Session) ([]model.Message, error) { return nil, nil }
 
-func (g Generic) NewArgs(prompt, _ string) []string {
+func (g Generic) NewArgs(prompt, _ string, _ LaunchOpts) []string {
 	if prompt == "" || g.promptFlag == "-" {
 		return nil
 	}
@@ -55,7 +55,7 @@ func AcceptsPrompt(p Provider) bool {
 	return true
 }
 
-func (g Generic) ResumeArgs(id string) []string {
+func (g Generic) ResumeArgs(id string, _ LaunchOpts) []string {
 	if len(g.resume) == 0 {
 		return nil
 	}

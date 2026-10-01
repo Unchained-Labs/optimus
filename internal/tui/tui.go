@@ -5,7 +5,9 @@ package tui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -111,6 +113,7 @@ type Model struct {
 	detailSess  *model.Session
 
 	limits   []ratelimits.Window
+	webUp    bool
 	status   string
 	statusAt time.Time
 	isErr    bool
@@ -124,6 +127,7 @@ type tickMsg time.Time
 type indexMsg struct {
 	idx    *index.Index
 	limits []ratelimits.Window
+	webUp  bool
 }
 type windowsMsg struct {
 	ws      []mux.Window
@@ -171,7 +175,7 @@ func tick() tea.Cmd {
 
 func (m *Model) loadIndex() tea.Cmd {
 	a := m.app
-	return func() tea.Msg { return indexMsg{idx: a.Index(), limits: ratelimits.Load()} }
+	return func() tea.Msg { return indexMsg{idx: a.Index(), limits: ratelimits.Load(), webUp: a.WebRunning()} }
 }
 
 func (m *Model) selectedWindow() *mux.Window {
@@ -227,7 +231,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case indexMsg:
-		m.idx, m.limits, m.loading = msg.idx, msg.limits, false
+		m.idx, m.limits, m.webUp, m.loading = msg.idx, msg.limits, msg.webUp, false
 		m.applyFilter()
 		return m, nil
 
@@ -429,6 +433,19 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "n":
 		return m, m.newAgentPicker("")
+	case "N":
+		agent, dir := m.app.Cfg.Agent(), m.contextDir()
+		return m, m.launch(agent, dir)
+	case "w":
+		m.busy = "starting the web dashboard…"
+		a := m.app
+		return m, func() tea.Msg {
+			if !a.EnsureWeb() {
+				return doneMsg{err: fmt.Errorf("web dashboard is not running and could not be started — try `optimus web`")}
+			}
+			openBrowser(a.WebURL())
+			return doneMsg{text: "web dashboard: " + a.WebURL(), reload: true}
+		}
 	}
 
 	switch m.tab {
@@ -467,6 +484,37 @@ func (m *Model) move(d int) {
 	case tabProjects:
 		m.pCur = clamp(m.pCur+d, len(m.projects()))
 	}
+}
+
+// contextDir is the project the user is looking at: the selected window,
+// project or session, falling back to the current directory.
+func (m *Model) contextDir() string {
+	switch m.tab {
+	case tabAgents:
+		if w := m.selectedWindow(); w != nil && w.Cwd != "" {
+			return w.Cwd
+		}
+	case tabSessions:
+		if s := m.selectedSession(); s != nil && s.Cwd != "" {
+			if st, err := os.Stat(s.Cwd); err == nil && st.IsDir() {
+				return s.Cwd
+			}
+		}
+	case tabProjects:
+		if ps := m.projects(); m.pCur < len(ps) {
+			return ps[m.pCur].Cwd
+		}
+	}
+	wd, _ := os.Getwd()
+	return wd
+}
+
+func openBrowser(u string) {
+	name := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		name = "open"
+	}
+	_ = exec.Command(name, u).Start()
 }
 
 // --- agents tab -----------------------------------------------------------------
@@ -567,21 +615,8 @@ func (m *Model) broadcastTargets() []string {
 	return ids
 }
 
-// sessionForWindow finds the transcript of the agent running in a window: by
-// the id optimus assigned, else the newest session of that agent in that dir
-// that started after the window.
 func (m *Model) sessionForWindow(w mux.Window) *model.Session {
-	if w.SessionID != "" {
-		if s := m.idx.Find(w.SessionID); s != nil {
-			return s
-		}
-	}
-	for _, s := range m.idx.Sessions { // newest first
-		if s.Agent == w.Agent && s.Cwd == w.Cwd && (w.Created.IsZero() || !s.End.Before(w.Created)) {
-			return s
-		}
-	}
-	return nil
+	return m.idx.ForWindow(w.Agent, w.Cwd, w.SessionID, w.Created)
 }
 
 // --- sessions tab -----------------------------------------------------------------
