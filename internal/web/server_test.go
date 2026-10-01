@@ -121,7 +121,8 @@ func TestTerminalRoundTrip(t *testing.T) {
 	ts, s := setup(t)
 	c := client(t, ts, s)
 	dir := t.TempDir()
-	id, err := mux.Spawn("sh-test", "shell", dir, "", []string{"sh"})
+	// explicit prompt: the default differs between users ($) and root (#)
+	id, err := mux.Spawn("sh-test", "shell", dir, "", []string{"env", "PS1=optimus-test> ", "sh"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +146,7 @@ func TestTerminalRoundTrip(t *testing.T) {
 	}
 	var seen strings.Builder
 	// wait for tmux to draw the shell prompt, like a person would
-	for !strings.Contains(seen.String(), "$ ") {
+	for !strings.Contains(seen.String(), "optimus-test> ") {
 		_, data, err := ws.Read(ctx)
 		if err != nil {
 			t.Fatalf("no prompt: %q (%v)", seen.String(), err)

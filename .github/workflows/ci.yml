@@ -60,11 +60,11 @@ jobs:
           tar -czf "$rel/optimus_${os}_${arch}.tar.gz" -C "$rel/o" optimus
           (cd "$rel" && shasum -a 256 ./*.tar.gz | sed 's| \./| |' > checksums.txt)
           export HOME="$RUNNER_TEMP/home2" && mkdir -p "$HOME"
-          OPTIMUS_DOWNLOAD_BASE="file://$rel" sh -s -- --yes --no-setup < install.sh
-          "$HOME/.local/bin/optimus" version
+          OPTIMUS_DOWNLOAD_BASE="file://$rel" sh -s -- --yes --no-setup --bin-dir "$HOME/bin" < install.sh
+          "$HOME/bin/optimus" version
           # a tampered checksum must abort the install
           sed -i.bak 's/^./0/' "$rel/checksums.txt"
-          if OPTIMUS_DOWNLOAD_BASE="file://$rel" sh -s -- --yes --no-setup < install.sh; then echo "tampered archive was installed"; exit 1; fi
+          if OPTIMUS_DOWNLOAD_BASE="file://$rel" sh -s -- --yes --no-setup --bin-dir "$HOME/bin" < install.sh; then echo "tampered archive was installed"; exit 1; fi
 
   docs:
     runs-on: ubuntu-latest

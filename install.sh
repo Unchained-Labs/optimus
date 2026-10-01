@@ -156,7 +156,8 @@ ok "$BIN_DIR"
 SRC=''
 case "$0" in
   */install.sh|install.sh)
-    d=$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)
+    d=''
+    if cd "$(dirname "$0")" 2>/dev/null; then d=$(pwd); cd - >/dev/null; fi
     if [ -n "$d" ] && [ -f "$d/go.mod" ] && grep -q 'module github.com/Unchained-Labs/optimus' "$d/go.mod"; then SRC=$d; FROM_SOURCE=1; fi ;;
 esac
 
@@ -190,7 +191,7 @@ else
     if fetch "$base/checksums.txt" "$TMP/checksums.txt"; then
       want=$(grep " $asset\$" "$TMP/checksums.txt" | awk '{print $1}')
       if have sha256sum; then got=$(sha256sum "$TMP/$asset" | awk '{print $1}'); else got=$(shasum -a 256 "$TMP/$asset" | awk '{print $1}'); fi
-      [ -n "$want" ] && [ "$want" = "$got" ] || die "checksum mismatch for $asset"
+      if [ -z "$want" ] || [ "$want" != "$got" ]; then die "checksum mismatch for $asset"; fi
       ok "checksum verified"
     fi
     tar -xzf "$TMP/$asset" -C "$TMP" optimus || die "could not unpack $asset"

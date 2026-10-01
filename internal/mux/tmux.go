@@ -183,19 +183,23 @@ func sanitize(s string) string {
 	return s
 }
 
+// fieldSep separates fields in tmux format output. It must be printable:
+// tmux 3.3+ escapes control characters (a \x1f comes back as the text "\037").
+const fieldSep = "|~|"
+
 // List returns every optimus window.
 func List() ([]Window, error) {
 	if !Available() || !Running() {
 		return nil, nil
 	}
-	f := strings.Join([]string{"#{window_id}", "#{window_index}", "#{window_name}", "#{@optimus_agent}", "#{@optimus_cwd}", "#{@optimus_session}", "#{pane_current_command}", "#{pane_pid}", "#{pane_dead}", "#{window_activity}", "#{@optimus_created}", "#{pane_current_path}"}, "\x1f")
+	f := strings.Join([]string{"#{window_id}", "#{window_index}", "#{window_name}", "#{@optimus_agent}", "#{@optimus_cwd}", "#{@optimus_session}", "#{pane_current_command}", "#{pane_pid}", "#{pane_dead}", "#{window_activity}", "#{@optimus_created}", "#{pane_current_path}"}, fieldSep)
 	out, err := run("list-windows", "-t", "="+Session, "-F", f)
 	if err != nil {
 		return nil, err
 	}
 	var ws []Window
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		p := strings.Split(line, "\x1f")
+		p := strings.Split(line, fieldSep)
 		if len(p) < 12 {
 			continue
 		}

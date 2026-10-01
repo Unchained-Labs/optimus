@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+- Agents not listed (and the web terminal returning 404) on tmux 3.3+, which escapes control characters in format output.
+
 ## [0.1.0]
 
 First public release.
