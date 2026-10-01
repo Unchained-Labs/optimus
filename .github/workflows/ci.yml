@@ -1,0 +1,74 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test -race ./...
+      - name: build
+        run: make build && ./bin/optimus version
+
+  installer:
+    name: installer (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: install from checkout (non-interactive)
+        run: |
+          export HOME="$RUNNER_TEMP/home" && mkdir -p "$HOME"
+          sh install.sh --yes --bin-dir "$HOME/bin"
+          "$HOME/bin/optimus" version
+          "$HOME/bin/optimus" agents
+          # --yes without --statusline must not touch Claude Code settings
+          test ! -e "$HOME/.claude/settings.json"
+      - name: install from a release archive, piped like curl | sh
+        run: |
+          os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m); [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
+          rel="$RUNNER_TEMP/rel" && mkdir -p "$rel/o"
+          CGO_ENABLED=0 go build -o "$rel/o/optimus" ./cmd/optimus
+          tar -czf "$rel/optimus_${os}_${arch}.tar.gz" -C "$rel/o" optimus
+          (cd "$rel" && shasum -a 256 ./*.tar.gz | sed 's| \./| |' > checksums.txt)
+          export HOME="$RUNNER_TEMP/home2" && mkdir -p "$HOME"
+          OPTIMUS_DOWNLOAD_BASE="file://$rel" sh -s -- --yes --no-setup < install.sh
+          "$HOME/.local/bin/optimus" version
+          # a tampered checksum must abort the install
+          sed -i.bak 's/^./0/' "$rel/checksums.txt"
+          if OPTIMUS_DOWNLOAD_BASE="file://$rel" sh -s -- --yes --no-setup < install.sh; then echo "tampered archive was installed"; exit 1; fi
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck install.sh demo/setup.sh demo/record.sh
+      - name: demo scripts compile
+        run: python3 -m py_compile demo/seed.py demo/fake-agent.py

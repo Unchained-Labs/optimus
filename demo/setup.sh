@@ -15,7 +15,7 @@ export HOME="$DEMO_HOME"
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_DATA_HOME CLAUDE_CONFIG_DIR CODEX_HOME OPENCODE_DATA_DIR OPTIMUS_HOME TMUX
 export PATH="$REPO/bin:$PATH"
 export PS1='\[\e[1;38;5;211m\]❯\[\e[0m\] '
-cd "$HOME/dev/api"
+cd "$HOME/dev/api" || return
 
 # agents already running when the demo starts
 optimus new claude   ~/dev/api         --name api-ratelimits >/dev/null

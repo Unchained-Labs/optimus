@@ -62,6 +62,8 @@ Usage:
  Setup
   optimus agents                  detected agents and where their data lives
   optimus config [init|path|edit] manage ~/.config/optimus/config.json
+  optimus config set KEY VALUE    e.g. budgets.daily_usd 50
+  optimus config statusline --install   let Claude Code report quota to optimus
   optimus reindex                 drop the parse cache and rescan
   optimus version
 `
@@ -833,9 +835,19 @@ func cmdConfig(a *app.App, args []string) error {
 		cmd := exec.Command(ed, config.Path())
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 		return cmd.Run()
+	case "set":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: optimus config set <key> <value>   (keys: %s)", strings.Join(settableKeys(), ", "))
+		}
+		return configSet(a.Cfg, args[1], args[2])
 	case "statusline":
+		if len(args) > 1 && args[1] == "--install" {
+			return installStatusline(a.Cfg)
+		}
 		self, _ := os.Executable()
-		fmt.Printf(`To let optimus see your Claude plan's remaining 5h / 7d quota, set it as
+		fmt.Printf(`Run "optimus config statusline --install" to set this up automatically, or do it by hand.
+
+To let optimus see your Claude plan's remaining 5h / 7d quota, set it as
 Claude Code's status line in ~/.claude/settings.json:
 
   "statusLine": { "type": "command", "command": "%s statusline" }
@@ -846,7 +858,7 @@ If you already have a status line command, keep it by chaining it in
   "statusline_chain": "<your existing command>"
 `, self, config.Path())
 	default:
-		return fmt.Errorf("usage: optimus config [show|path|init|edit|statusline]")
+		return fmt.Errorf("usage: optimus config [show|path|init|edit|set KEY VALUE|statusline [--install]]")
 	}
 	return nil
 }

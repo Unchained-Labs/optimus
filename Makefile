@@ -2,6 +2,12 @@ PREFIX ?= $(HOME)/.local
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/wardn/optimus/internal/cli.Version=$(VERSION)
 
+.PHONY: lint
+lint:
+	gofmt -l . | (! grep .)
+	go vet ./...
+	shellcheck install.sh demo/setup.sh demo/record.sh
+
 .PHONY: build install test vet clean
 
 build:
