@@ -146,7 +146,7 @@ func TestTerminalRoundTrip(t *testing.T) {
 	}
 	var seen strings.Builder
 	// wait for tmux to draw the shell prompt, like a person would
-	for !strings.Contains(seen.String(), "optimus-test> ") {
+	for !strings.Contains(seen.String(), "optimus-test>") { // tmux may draw the trailing space as a cursor move
 		_, data, err := ws.Read(ctx)
 		if err != nil {
 			t.Fatalf("no prompt: %q (%v)", seen.String(), err)
