@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wardn/optimus/internal/config"
-	"github.com/wardn/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/model"
 )
 
 // Keys are matched as prefixes of the normalized model id, longest first.

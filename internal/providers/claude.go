@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wardn/optimus/internal/config"
-	"github.com/wardn/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/model"
 )
 
 // Claude reads Claude Code transcripts from ~/.claude/projects/<slug>/<id>.jsonl

@@ -4,3 +4,9 @@
 *.out
 /demo/.home/
 __pycache__/
+/demo/build/
+/demo/browser/build/
+/site/
+/docs/reference/cli-usage.txt
+/docs/assets/demo/
+/.claude/

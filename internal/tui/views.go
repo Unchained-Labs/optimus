@@ -9,10 +9,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/wardn/optimus/internal/format"
-	"github.com/wardn/optimus/internal/model"
-	"github.com/wardn/optimus/internal/mux"
-	"github.com/wardn/optimus/internal/usage"
+	"github.com/Unchained-Labs/optimus/internal/format"
+	"github.com/Unchained-Labs/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/usage"
 )
 
 func ago(t time.Time) string { return format.Ago(t, time.Now()) }

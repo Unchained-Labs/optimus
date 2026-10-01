@@ -3,7 +3,7 @@ package index
 import (
 	"time"
 
-	"github.com/wardn/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/model"
 )
 
 // ForWindow finds the transcript of the agent running in a multiplexer window:

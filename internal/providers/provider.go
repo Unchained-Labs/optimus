@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wardn/optimus/internal/config"
-	"github.com/wardn/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/model"
 )
 
 // Source is one session on disk. Key changes whenever the session changes and

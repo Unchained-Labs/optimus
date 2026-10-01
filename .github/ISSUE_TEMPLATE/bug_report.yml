@@ -1,0 +1,50 @@
+name: Bug report
+description: Something in optimus doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report this. Please don't paste transcripts or tokens — redact anything private.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. optimus new codex ~/dev/app
+        2. press enter to attach
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where?
+      multiple: true
+      options: [Terminal dashboard, Web dashboard, CLI command, Installer, Handoff, Usage / costs]
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Output of these commands.
+      value: |
+        optimus version:
+        optimus agents:
+        tmux -V:
+        OS:
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      render: text

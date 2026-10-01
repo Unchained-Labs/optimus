@@ -1,7 +1,7 @@
 #!/bin/sh
 # optimus installer — the tmux of AI coding agents
 #
-#   curl -fsSL https://raw.githubusercontent.com/wardn/optimus/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/Unchained-Labs/optimus/main/install.sh | sh
 #
 # or from a checkout:  sh install.sh
 #
@@ -10,12 +10,12 @@
 #   --bin-dir DIR        where to put the binary (OPTIMUS_BIN_DIR, default ~/.local/bin)
 #   --version TAG        release to install (OPTIMUS_VERSION, default latest)
 #   --from-source        build with Go instead of downloading a release
-#   --repo OWNER/NAME    GitHub repo (OPTIMUS_REPO, default wardn/optimus)
+#   --repo OWNER/NAME    GitHub repo (OPTIMUS_REPO, default Unchained-Labs/optimus)
 #   --statusline         set up the Claude Code status line without asking
 #   --no-setup           only install the binary; skip the setup questions
 set -eu
 
-REPO="${OPTIMUS_REPO:-wardn/optimus}"
+REPO="${OPTIMUS_REPO:-Unchained-Labs/optimus}"
 BIN_DIR="${OPTIMUS_BIN_DIR:-}"
 VERSION="${OPTIMUS_VERSION:-latest}"
 YES="${OPTIMUS_YES:-0}"
@@ -157,14 +157,14 @@ SRC=''
 case "$0" in
   */install.sh|install.sh)
     d=$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)
-    if [ -n "$d" ] && [ -f "$d/go.mod" ] && grep -q 'module github.com/wardn/optimus' "$d/go.mod"; then SRC=$d; FROM_SOURCE=1; fi ;;
+    if [ -n "$d" ] && [ -f "$d/go.mod" ] && grep -q 'module github.com/Unchained-Labs/optimus' "$d/go.mod"; then SRC=$d; FROM_SOURCE=1; fi ;;
 esac
 
 build_from() { # dir
   have go || die "Go is required to build from source (https://go.dev/dl) — or install a release binary instead"
   ver=$(git -C "$1" describe --tags --always --dirty 2>/dev/null || echo dev)
   info "go build ($(go version | awk '{print $3}'), version $ver)…"
-  (cd "$1" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/wardn/optimus/internal/cli.Version=$ver" -o "$TMP/optimus" ./cmd/optimus) \
+  (cd "$1" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/Unchained-Labs/optimus/internal/cli.Version=$ver" -o "$TMP/optimus" ./cmd/optimus) \
     || die "build failed"
 }
 

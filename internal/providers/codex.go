@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wardn/optimus/internal/config"
-	"github.com/wardn/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/model"
 )
 
 // Codex reads OpenAI Codex CLI rollouts from

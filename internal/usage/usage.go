@@ -6,9 +6,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/wardn/optimus/internal/config"
-	"github.com/wardn/optimus/internal/model"
-	"github.com/wardn/optimus/internal/pricing"
+	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/pricing"
 )
 
 type Row struct {

@@ -1,4 +1,4 @@
-module github.com/wardn/optimus
+module github.com/Unchained-Labs/optimus
 
 go 1.25.6
 

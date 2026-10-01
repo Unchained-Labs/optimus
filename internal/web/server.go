@@ -18,14 +18,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wardn/optimus/internal/app"
-	"github.com/wardn/optimus/internal/config"
-	"github.com/wardn/optimus/internal/index"
-	"github.com/wardn/optimus/internal/model"
-	"github.com/wardn/optimus/internal/mux"
-	"github.com/wardn/optimus/internal/providers"
-	"github.com/wardn/optimus/internal/ratelimits"
-	"github.com/wardn/optimus/internal/usage"
+	"github.com/Unchained-Labs/optimus/internal/app"
+	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/index"
+	"github.com/Unchained-Labs/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/providers"
+	"github.com/Unchained-Labs/optimus/internal/ratelimits"
+	"github.com/Unchained-Labs/optimus/internal/usage"
 )
 
 //go:embed static

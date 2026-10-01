@@ -15,10 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wardn/optimus/internal/app"
-	"github.com/wardn/optimus/internal/config"
-	"github.com/wardn/optimus/internal/mux"
-	"github.com/wardn/optimus/internal/web"
+	"github.com/Unchained-Labs/optimus/internal/app"
+	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/web"
 )
 
 func cmdWeb(a *app.App, args []string) error {

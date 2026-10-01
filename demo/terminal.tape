@@ -1,6 +1,5 @@
-# optimus demo — render with: demo/record.sh
-Output demo/optimus.mp4
-Output demo/optimus.gif
+# optimus demo, terminal part — rendered by demo/record.sh
+Output demo/build/terminal.mp4
 
 Require python3
 Require tmux
@@ -83,11 +82,21 @@ Sleep 9s
 Alt+q
 Sleep 2s
 
-# --- projects and spend
+# --- projects, and one key to a new session with the default agent
 Type "3"
-Sleep 3s
+Sleep 2.5s
+Down
+Down
+Sleep 800ms
+Type "N"
+Sleep 4.5s
+Alt+q
+Sleep 1.5s
+
+# --- spend and what's left
 Type "4"
-Sleep 6s
+Sleep 5s
+Sleep 1s
 Type "?"
 Sleep 3.5s
 Escape

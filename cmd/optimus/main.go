@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/wardn/optimus/internal/cli"
-	"github.com/wardn/optimus/internal/tui"
+	"github.com/Unchained-Labs/optimus/internal/cli"
+	"github.com/Unchained-Labs/optimus/internal/tui"
 )
 
 func main() {

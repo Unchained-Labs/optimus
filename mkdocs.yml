@@ -1,0 +1,110 @@
+site_name: optimus
+site_description: The tmux of AI coding agents — run, watch and hand off Claude Code, Codex and opencode sessions from your terminal, browser or phone.
+site_url: https://unchained-labs.github.io/optimus/
+repo_url: https://github.com/Unchained-Labs/optimus
+repo_name: Unchained-Labs/optimus
+edit_uri: edit/main/docs/
+copyright: MIT licensed · © 2026 Erwin Lejeune and contributors
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.progress
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+    - toc.follow
+
+extra_css:
+  - assets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Unchained-Labs/optimus
+  generator: false
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - def_list
+  - toc:
+      permalink: "#"
+  - pymdownx.details
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.inlinehilite
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      base_path: [".", "docs"]
+      check_paths: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: getting-started/install.md
+      - Quick start: getting-started/quickstart.md
+  - Guide:
+      - Terminal dashboard: guide/terminal.md
+      - Browser & phone: guide/web.md
+      - Sessions & handoff: guide/sessions.md
+      - Costs & quota: guide/usage.md
+      - Configuration: guide/configuration.md
+  - Reference:
+      - CLI: reference/cli.md
+      - Agents: reference/agents.md
+      - Architecture: reference/architecture.md
+      - Security: reference/security.md
+  - Project:
+      - Contributing: project/contributing.md
+      - Changelog: project/changelog.md

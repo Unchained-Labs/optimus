@@ -1,6 +1,6 @@
 PREFIX ?= $(HOME)/.local
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X github.com/wardn/optimus/internal/cli.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/Unchained-Labs/optimus/internal/cli.Version=$(VERSION)
 
 .PHONY: lint
 lint:
@@ -24,3 +24,18 @@ vet:
 
 clean:
 	rm -rf bin
+
+.PHONY: demo
+demo:
+	demo/record.sh
+
+.PHONY: docs-gen docs docs-serve
+docs-gen: build
+	./bin/optimus help > docs/reference/cli-usage.txt
+	mkdir -p docs/assets/demo && cp demo/optimus.mp4 demo/optimus.gif docs/assets/demo/
+
+docs: docs-gen
+	mkdocs build --strict
+
+docs-serve: docs-gen
+	mkdocs serve
