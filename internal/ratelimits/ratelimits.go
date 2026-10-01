@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wardn/optimus/internal/config"
-	"github.com/wardn/optimus/internal/providers"
+	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/providers"
 )
 
 type Window struct {

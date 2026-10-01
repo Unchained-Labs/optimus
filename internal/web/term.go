@@ -10,7 +10,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
 
-	"github.com/wardn/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/mux"
 )
 
 // term bridges a browser terminal (xterm.js) to a private tmux view of one

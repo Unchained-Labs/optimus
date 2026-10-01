@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wardn/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/model"
 )
 
 func TestBuild(t *testing.T) {

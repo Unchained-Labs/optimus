@@ -3,7 +3,7 @@ package providers
 import (
 	"os"
 
-	"github.com/wardn/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/model"
 )
 
 // Generic is a launch-only agent: optimus can run it in the multiplexer and

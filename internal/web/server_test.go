@@ -15,8 +15,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/wardn/optimus/internal/app"
-	"github.com/wardn/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/app"
+	"github.com/Unchained-Labs/optimus/internal/mux"
 )
 
 // setup isolates config, agent history and the tmux server.

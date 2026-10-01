@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wardn/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/config"
 )
 
 func TestInstallStatuslineKeepsExisting(t *testing.T) {

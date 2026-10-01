@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wardn/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/config"
 )
 
 // Socket is the tmux server name; OPTIMUS_SOCKET selects another server

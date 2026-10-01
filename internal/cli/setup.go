@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wardn/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/config"
 )
 
 // settable maps `optimus config set` keys to setters.

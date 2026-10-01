@@ -7,7 +7,8 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEMO_HOME="${DEMO_HOME:?set DEMO_HOME to an empty scratch dir}"
 
 export OPTIMUS_SOCKET=optimus-demo
-tmux -L "$OPTIMUS_SOCKET" kill-server 2>/dev/null
+tmux -L "$OPTIMUS_SOCKET" kill-server 2>/dev/null || true
+[ -d "$DEMO_HOME" ] && chmod -R u+w "$DEMO_HOME" 2>/dev/null
 rm -rf "$DEMO_HOME" && mkdir -p "$DEMO_HOME"
 python3 "$REPO/demo/seed.py" "$DEMO_HOME" >/dev/null
 

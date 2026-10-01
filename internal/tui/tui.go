@@ -16,13 +16,13 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/wardn/optimus/internal/app"
-	"github.com/wardn/optimus/internal/clip"
-	"github.com/wardn/optimus/internal/index"
-	"github.com/wardn/optimus/internal/model"
-	"github.com/wardn/optimus/internal/mux"
-	"github.com/wardn/optimus/internal/providers"
-	"github.com/wardn/optimus/internal/ratelimits"
+	"github.com/Unchained-Labs/optimus/internal/app"
+	"github.com/Unchained-Labs/optimus/internal/clip"
+	"github.com/Unchained-Labs/optimus/internal/index"
+	"github.com/Unchained-Labs/optimus/internal/model"
+	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/providers"
+	"github.com/Unchained-Labs/optimus/internal/ratelimits"
 )
 
 type tab int
