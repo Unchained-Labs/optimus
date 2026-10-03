@@ -38,6 +38,7 @@ optimus config set KEY VALUE
 | Key | Default | Set with `config set` | Meaning |
 |---|---|:-:|---|
 | `default_agent` | `claude` | ✓ | agent for `optimus new`, ++shift+n++ and quick start |
+| `attach` | `auto` | ✓ | inside your own tmux: `auto`/`popup` opens agents in a popup, `nested` nests tmux |
 | `remote.claude_remote_control` | `true` | ✓ | start Claude sessions with `--remote-control` |
 | `remote.web_autostart` | `true` | ✓ | start the web dashboard with the first session |
 | `remote.addr` | `127.0.0.1:7777` | ✓ | web dashboard address |
