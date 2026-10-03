@@ -124,7 +124,7 @@ func cmdWatch(a *app.App) error {
 	fmt.Println("watching agents — notifications on input and when a turn finishes (Ctrl-C to stop)")
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	w := &notify.Watcher{Cfg: a.Cfg, OnChange: func(win mux.Window, from, to mux.State, info agentstate.Info) {
+	w := &notify.Watcher{Cfg: a.Cfg, Advisories: a.SuggestionAdvisories(), OnChange: func(win mux.Window, from, to mux.State, info agentstate.Info) {
 		fmt.Printf("%s  %-20s %s → %s  %s\n", time.Now().Format("15:04:05"), win.Name, from, to, info.Message)
 	}}
 	t := time.NewTicker(2 * time.Second)

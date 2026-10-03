@@ -256,38 +256,70 @@ func (a *App) EnsureWeb() bool {
 // HandoffDoc builds (and optionally condenses) a handoff document for a
 // session and saves it to disk.
 func (a *App) HandoffDoc(s *model.Session, note string, summarize bool) (doc, path string, err error) {
-	p := providers.Get(s.Agent)
-	if p == nil {
-		return "", "", errors.New("unknown agent " + s.Agent)
-	}
-	msgs, err := p.Transcript(s)
+	doc, err = a.BuildHandoff(s, note, summarize)
 	if err != nil {
 		return "", "", err
-	}
-	doc = handoff.Build(s, msgs, handoff.Options{MaxTokens: a.Cfg.HandoffTokens, Note: note})
-	if summarize {
-		sp := providers.Get(a.Cfg.SummarizeWith)
-		if sp == nil {
-			return "", "", fmt.Errorf("summarize_with agent %q unknown", a.Cfg.SummarizeWith)
-		}
-		bin, _ := providers.Command(a.Cfg, sp)
-		sum, err := handoff.Summarize(bin, sp.Name(), doc)
-		if err != nil {
-			return "", "", err
-		}
-		doc = fmt.Sprintf("# Handoff: %s\n\nCondensed by optimus from %s session `%s` in `%s`.\n\n%s\n", s.DisplayTitle(), s.Agent, s.ID, s.Cwd, sum)
 	}
 	path, err = handoff.Save(s, doc)
 	return doc, path, err
 }
 
+// BuildHandoff renders a session's handoff document without saving it, for
+// previewing and editing before it's sent.
+func (a *App) BuildHandoff(s *model.Session, note string, summarize bool) (string, error) {
+	p := providers.Get(s.Agent)
+	if p == nil {
+		return "", errors.New("unknown agent " + s.Agent)
+	}
+	msgs, err := p.Transcript(s)
+	if err != nil {
+		return "", err
+	}
+	doc := handoff.Build(s, msgs, handoff.Options{MaxTokens: a.Cfg.HandoffTokens, Note: note})
+	if summarize {
+		sp := providers.Get(a.Cfg.SummarizeWith)
+		if sp == nil {
+			return "", fmt.Errorf("summarize_with agent %q unknown", a.Cfg.SummarizeWith)
+		}
+		bin, _ := providers.Command(a.Cfg, sp)
+		sum, err := handoff.Summarize(bin, sp.Name(), doc)
+		if err != nil {
+			return "", err
+		}
+		doc = fmt.Sprintf("# Handoff: %s\n\nCondensed by optimus from %s session `%s` in `%s`.\n\n%s\n", s.DisplayTitle(), s.Agent, s.ID, s.Cwd, sum)
+	}
+	return doc, nil
+}
+
+// HandoffRequest says what to send and where. Doc, when set, is used as the
+// document (e.g. after the user edited a preview).
+type HandoffRequest struct {
+	Note      string
+	Summarize bool
+	Doc       string
+	Dir       string // for a new agent; default: the session's project
+}
+
+func (a *App) document(s *model.Session, r HandoffRequest) (string, error) {
+	if strings.TrimSpace(r.Doc) != "" {
+		return handoff.Save(s, r.Doc)
+	}
+	_, path, err := a.HandoffDoc(s, r.Note, r.Summarize)
+	return path, err
+}
+
 // HandoffTo launches a new agent in the session's project, primed with the
 // handoff document.
 func (a *App) HandoffTo(s *model.Session, agent, dir, note string, summarize bool) (string, string, error) {
-	_, path, err := a.HandoffDoc(s, note, summarize)
+	return a.HandoffToWith(s, agent, HandoffRequest{Note: note, Summarize: summarize, Dir: dir})
+}
+
+func (a *App) HandoffToWith(s *model.Session, agent string, r HandoffRequest) (string, string, error) {
+	path, err := a.document(s, r)
 	if err != nil {
 		return "", "", err
 	}
+	dir := r.Dir
 	if dir == "" {
 		dir = s.Cwd
 	}
@@ -300,7 +332,11 @@ func (a *App) HandoffTo(s *model.Session, agent, dir, note string, summarize boo
 
 // HandoffInto sends the handoff to an already-running optimus window.
 func (a *App) HandoffInto(s *model.Session, windowID, note string, summarize bool) (string, error) {
-	_, path, err := a.HandoffDoc(s, note, summarize)
+	return a.HandoffIntoWith(s, windowID, HandoffRequest{Note: note, Summarize: summarize})
+}
+
+func (a *App) HandoffIntoWith(s *model.Session, windowID string, r HandoffRequest) (string, error) {
+	path, err := a.document(s, r)
 	if err != nil {
 		return "", err
 	}

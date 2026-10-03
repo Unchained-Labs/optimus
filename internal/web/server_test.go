@@ -273,3 +273,34 @@ func TestWorktreeFlow(t *testing.T) {
 		t.Error("worktree still on disk after discard")
 	}
 }
+
+func TestHandoffPreviewAndEdit(t *testing.T) {
+	ts, s := setup(t)
+	c := client(t, ts, s)
+	home := os.Getenv("OPTIMUS_AGENT_HOME")
+	dir := home + "/.claude/projects/-w-app"
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(dir+"/aaaa1111-2222-3333-4444-555555555555.jsonl", []byte(
+		`{"type":"user","timestamp":"2026-09-01T10:00:00Z","cwd":"/w/app","message":{"role":"user","content":"fix the login bug"}}`+"\n"+
+			`{"type":"assistant","timestamp":"2026-09-01T10:00:05Z","requestId":"r","message":{"id":"m","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"Fixed."}],"usage":{"input_tokens":1,"output_tokens":1}}}`+"\n"), 0o644)
+
+	post := func(body string) map[string]string {
+		resp, err := c.Post(ts.URL+"/api/sessions/aaaa1111/handoff", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v map[string]string
+		json.NewDecoder(resp.Body).Decode(&v)
+		if resp.StatusCode != 200 {
+			t.Fatalf("%d %v", resp.StatusCode, v)
+		}
+		return v
+	}
+	if r := post(`{"target":"preview"}`); !strings.Contains(r["document"], "> fix the login bug") {
+		t.Fatalf("preview: %q", r["document"])
+	}
+	r := post(`{"target":"file","document":"# my edited brief\n"}`)
+	if b, _ := os.ReadFile(r["path"]); string(b) != "# my edited brief\n" {
+		t.Fatalf("edited document not used: %q", b)
+	}
+}

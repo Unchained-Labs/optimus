@@ -205,3 +205,10 @@ button.attn { background: var(--red); color: var(--bg3); font-weight: 700; anima
 .win .wt { font: 12px var(--mono); color: var(--teal); margin-top: 2px; }
 pre.diff { margin: 0; font: 12px/1.5 var(--mono); white-space: pre; overflow: auto; }
 pre.diff .a { color: var(--green); } pre.diff .d { color: var(--red); } pre.diff .h { color: var(--mauve); } pre.diff .f { font-weight: 700; }
+
+.suggest { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: color-mix(in srgb, var(--yellow) 16%, transparent); border-bottom: 1px solid var(--surface); font-size: 13px; }
+.suggest b { color: var(--yellow); }
+.suggest button { margin-left: auto; }
+#handoff-preview-wrap { margin-top: 12px; }
+#handoff-preview-wrap summary { cursor: pointer; color: var(--blue); font-size: 13px; }
+#handoff-doc { margin-top: 8px; font-size: 12px; resize: vertical; }

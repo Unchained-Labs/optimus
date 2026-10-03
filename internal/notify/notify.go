@@ -19,6 +19,7 @@ type Event struct {
 	Body   string
 	Urgent bool // needs an answer, not just information
 	Window string
+	Key    string // dedupe key for advisories
 }
 
 // Send delivers an event through every enabled channel. It never blocks for

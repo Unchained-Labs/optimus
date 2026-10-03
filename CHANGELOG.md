@@ -10,6 +10,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Answer an agent without attaching: `!` in the terminal dashboard shows its question and forwards the next key; `optimus answer <window> <key>`.
 - One git worktree per agent (`--worktree`, `-w`, or the launch prompt), with changes shown per agent, and diff / merge / discard from the CLI (`optimus wt`), both dashboards and the API.
 - Fan-out: the same task to several agents, each in its own worktree (`optimus fanout`, `F`, browser), and `optimus compare`.
+- Preview and edit a handoff before it's sent (`--edit`, "✎ preview & edit first" in the TUI, "Preview & edit" in the browser).
+- Quota-aware handoff: when an agent's quota window passes `handoff_suggest_pct` (default 85%), optimus suggests continuing its running sessions in another agent (notification, `C` in the TUI, a banner in the browser).
 - Jump to the next agent waiting for you: `Alt-n` anywhere in the multiplexer, `i` in the dashboards, `optimus next`.
 
 ### Fixed

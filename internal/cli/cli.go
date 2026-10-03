@@ -19,6 +19,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/clip"
 	"github.com/Unchained-Labs/optimus/internal/config"
 	"github.com/Unchained-Labs/optimus/internal/format"
+	"github.com/Unchained-Labs/optimus/internal/handoff"
 	"github.com/Unchained-Labs/optimus/internal/index"
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
@@ -62,7 +63,7 @@ Usage:
         --to AGENT                  …start AGENT primed with it
         --into WINDOW               …send it into a running window
         --copy | --print            …copy to clipboard / print it (default: save + print path)
-        --note TEXT --summarize --dir DIR
+        --note TEXT --summarize --dir DIR --edit (review in $EDITOR first)
 
  Costs & limits
   optimus usage                   spend report  (--by day|month|model|agent|project|session --since 7d --json)
@@ -697,15 +698,24 @@ func cmdHandoff(a *app.App, args []string) error {
 	note := fs.String("note", "", "extra instructions to include")
 	summarize := fs.Bool("summarize", false, "condense with an agent first (costs tokens)")
 	dir := fs.String("dir", "", "working dir for --to (default: the session's)")
+	edit := fs.Bool("edit", false, "review and edit the document in $EDITOR before sending")
 	pos := parse(fs, args)
 	idx := a.Index()
 	s, err := findSession(idx, first(pos))
 	if err != nil {
 		return err
 	}
+	req := app.HandoffRequest{Note: *note, Summarize: *summarize, Dir: absDirOrEmpty(*dir)}
+	if *edit {
+		doc, err := editDocument(a, s, req)
+		if err != nil {
+			return err
+		}
+		req.Doc = doc
+	}
 	switch {
 	case *to != "":
-		id, path, err := a.HandoffTo(s, *to, absDirOrEmpty(*dir), *note, *summarize)
+		id, path, err := a.HandoffToWith(s, *to, req)
 		if err != nil {
 			return err
 		}
@@ -716,15 +726,19 @@ func cmdHandoff(a *app.App, args []string) error {
 		if err != nil {
 			return err
 		}
-		path, err := a.HandoffInto(s, w.ID, *note, *summarize)
+		path, err := a.HandoffIntoWith(s, w.ID, req)
 		if err != nil {
 			return err
 		}
 		fmt.Printf("context saved to %s and sent to %d:%s\n", path, w.Index, w.Name)
 		return nil
 	}
-	doc, path, err := a.HandoffDoc(s, *note, *summarize)
-	if err != nil {
+	doc, path := req.Doc, ""
+	if doc == "" {
+		if doc, path, err = a.HandoffDoc(s, *note, *summarize); err != nil {
+			return err
+		}
+	} else if path, err = handoff.Save(s, doc); err != nil {
 		return err
 	}
 	if *printIt {
@@ -896,4 +910,28 @@ If you already have a status line command, keep it by chaining it in
 		return fmt.Errorf("usage: optimus config [show|path|init|edit|set KEY VALUE|statusline [--install]]")
 	}
 	return nil
+}
+
+// editDocument builds the handoff, opens it in $EDITOR and returns the edited
+// text.
+func editDocument(a *app.App, s *model.Session, r app.HandoffRequest) (string, error) {
+	doc, err := a.BuildHandoff(s, r.Note, r.Summarize)
+	if err != nil {
+		return "", err
+	}
+	path, err := handoff.Save(s, doc)
+	if err != nil {
+		return "", err
+	}
+	ed := os.Getenv("EDITOR")
+	if ed == "" {
+		ed = "vi"
+	}
+	cmd := exec.Command("sh", "-c", ed+` "$1"`, "sh", path)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(path)
+	return string(b), err
 }
