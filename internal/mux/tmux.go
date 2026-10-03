@@ -46,6 +46,11 @@ type Window struct {
 	Dead      bool
 	Activity  time.Time
 	Created   time.Time
+	// set when the agent works in its own git worktree
+	Worktree string
+	Repo     string
+	Base     string
+	Branch   string
 }
 
 func Available() bool {
@@ -215,7 +220,7 @@ func List() ([]Window, error) {
 	if !Available() || !Running() {
 		return nil, nil
 	}
-	f := strings.Join([]string{"#{window_id}", "#{window_index}", "#{window_name}", "#{@optimus_agent}", "#{@optimus_cwd}", "#{@optimus_session}", "#{pane_current_command}", "#{pane_pid}", "#{pane_dead}", "#{window_activity}", "#{@optimus_created}", "#{pane_current_path}", "#{pane_id}"}, fieldSep)
+	f := strings.Join([]string{"#{window_id}", "#{window_index}", "#{window_name}", "#{@optimus_agent}", "#{@optimus_cwd}", "#{@optimus_session}", "#{pane_current_command}", "#{pane_pid}", "#{pane_dead}", "#{window_activity}", "#{@optimus_created}", "#{pane_current_path}", "#{pane_id}", "#{@optimus_worktree}", "#{@optimus_repo}", "#{@optimus_base}", "#{@optimus_branch}"}, fieldSep)
 	out, err := run("list-windows", "-t", "="+Session, "-F", f)
 	if err != nil {
 		return nil, err
@@ -223,7 +228,7 @@ func List() ([]Window, error) {
 	var ws []Window
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		p := strings.Split(line, fieldSep)
-		if len(p) < 13 {
+		if len(p) < 17 {
 			continue
 		}
 		w := Window{ID: p[0], Name: p[2], Agent: p[3], Cwd: p[4], SessionID: p[5], Command: p[6], Dead: p[8] == "1"}
@@ -239,6 +244,7 @@ func List() ([]Window, error) {
 			w.Cwd = p[11]
 		}
 		w.Pane = p[12]
+		w.Worktree, w.Repo, w.Base, w.Branch = p[13], p[14], p[15], p[16]
 		if w.Agent == "" {
 			w.Agent = w.Command
 		}

@@ -53,6 +53,9 @@
           <div class="pane-actions">
             <button id="act-transcript" title="Transcript">Transcript</button>
             <button id="act-handoff" title="Hand off this session's context">Handoff</button>
+            <button id="act-diff" hidden title="Review what this agent changed">Diff</button>
+            <button id="act-merge" hidden title="Commit and merge this agent's branch into the repo">Merge</button>
+            <button id="act-discard" class="danger" hidden title="Stop the agent and delete its worktree and branch">Discard</button>
             <button id="act-rename">Rename</button>
             <button id="act-kill" class="danger">Stop</button>
           </div>
@@ -119,6 +122,8 @@
     <div class="row">
       <div class="grow"><label class="lbl" for="new-name">Name <span class="dim">(optional)</span></label><input id="new-name" placeholder="auto"></div>
     </div>
+    <label class="toggle" id="new-wt-wrap"><input type="checkbox" id="new-wt"> Own git worktree &amp; branch <span class="dim">— keeps parallel agents from clashing</span></label>
+    <label class="toggle"><input type="checkbox" id="new-fan"> Fan out <span class="dim">— pick several agents; each gets the same task in its own worktree</span></label>
     <label class="toggle" id="new-rc-wrap"><input type="checkbox" id="new-rc"> Claude Remote Control <span class="dim">— also reachable from the Claude apps</span></label>
     <div class="dlg-actions">
       <button value="cancel" formnovalidate>Cancel</button>
@@ -145,6 +150,14 @@
     <div class="tr-actions"><button id="tr-resume">Resume</button><button id="tr-handoff">Handoff</button><button id="tr-close">Close</button></div>
   </div>
   <div class="tr-body" id="tr-body"></div>
+</dialog>
+
+<dialog id="dlg-diff" class="dlg wide">
+  <div class="tr-head">
+    <div><h2 id="diff-title"></h2><div class="dim mono" id="diff-meta"></div></div>
+    <div class="tr-actions"><button id="diff-merge">Merge</button><button id="diff-close">Close</button></div>
+  </div>
+  <pre class="tr-body diff" id="diff-body"></pre>
 </dialog>
 
 <dialog id="dlg-login" class="dlg">

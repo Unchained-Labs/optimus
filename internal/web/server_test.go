@@ -222,3 +222,54 @@ func TestHookRecordsPane(t *testing.T) {
 	}
 	t.Fatal("hook state never reached the window")
 }
+
+func TestWorktreeFlow(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	ts, s := setup(t)
+	c := client(t, ts, s)
+	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@x"} {
+		t.Setenv(k, v)
+	}
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"commit", "-q", "--allow-empty", "-m", "init"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("%v %s", err, out)
+		}
+	}
+	post := func(path, body string) map[string]any {
+		resp, err := c.Post(ts.URL+path, "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v map[string]any
+		json.NewDecoder(resp.Body).Decode(&v)
+		if resp.StatusCode != 200 {
+			t.Fatalf("%s: %d %v", path, resp.StatusCode, v)
+		}
+		return v
+	}
+	r := post("/api/fanout", `{"agents":["shell"],"dir":"`+repo+`","prompt":"add a readme"}`)
+	id := r["windows"].([]any)[0].(string)
+	w, err := mux.Resolve(id)
+	if err != nil || w.Worktree == "" || !strings.HasPrefix(w.Branch, "optimus/shell-add-a-readme-") {
+		t.Fatalf("window not in a worktree: %+v %v", w, err)
+	}
+	os.WriteFile(w.Worktree+"/README.md", []byte("# hi\n"), 0o644)
+
+	resp, _ := c.Get(ts.URL + "/api/windows/" + id + "/diff")
+	var d map[string]string
+	json.NewDecoder(resp.Body).Decode(&d)
+	if !strings.Contains(d["diff"], "+# hi") {
+		t.Fatalf("diff: %q", d["diff"])
+	}
+	post("/api/windows/"+id+"/merge", `{}`)
+	if b, _ := os.ReadFile(repo + "/README.md"); string(b) != "# hi\n" {
+		t.Fatal("merge did not reach the main checkout")
+	}
+	post("/api/windows/"+id+"/discard", `{}`)
+	if _, err := os.Stat(w.Worktree); !os.IsNotExist(err) {
+		t.Error("worktree still on disk after discard")
+	}
+}

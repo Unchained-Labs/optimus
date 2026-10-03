@@ -139,6 +139,7 @@ func cmdAgentShortcut(a *app.App, agent string, args []string) error {
 	prompt := fs.String("p", "", "first message")
 	name := fs.String("name", "", "window name")
 	detach := fs.Bool("d", false, "start in the background, don't attach")
+	wt := fs.Bool("w", false, "run in a new git worktree and branch")
 	pos := parse(fs, args)
 	dir := ""
 	if len(pos) > 0 {
@@ -147,7 +148,7 @@ func cmdAgentShortcut(a *app.App, agent string, args []string) error {
 	if len(pos) > 1 && *prompt == "" {
 		*prompt = strings.Join(pos[1:], " ")
 	}
-	id, err := a.Launch(agent, absDir(dir), *prompt, *name)
+	id, err := a.LaunchWith(app.LaunchRequest{Agent: agent, Dir: absDir(dir), Prompt: *prompt, Name: *name, Worktree: *wt})
 	if err != nil {
 		return err
 	}

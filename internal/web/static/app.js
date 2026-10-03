@@ -119,7 +119,8 @@ function renderFleet() {
   $("#windows").innerHTML = wins.map((w) => `
     <button class="win ${w.id === S.selected ? "on" : ""}" data-id="${esc(w.id)}">
       <div class="l1"><strong>${esc(w.name)}</strong>${stateBadge(w.state)}</div>
-      <div class="l2">${agentChip(w.agent)} ${esc(short(w.cwd))} · ${ago(w.activity)}</div>
+      <div class="l2">${agentChip(w.agent)} ${esc(short(w.worktree ? w.worktree.repo : w.cwd))} · ${ago(w.activity)}</div>
+      ${w.worktree ? `<div class="wt">⎇ ${esc(w.worktree.label)}</div>` : ""}
       ${w.state === "input" && w.message ? `<div class="ask">◆ ${esc(w.message)}</div>` : w.title ? `<div class="l3">${esc(w.title)}${w.cost ? ` · <span class="dim">${money(w.cost)}</span>` : ""}</div>` : ""}
     </button>`).join("");
   $$("#windows .win").forEach((b) => b.addEventListener("click", () => select(b.dataset.id)));
@@ -153,6 +154,7 @@ function renderFleet() {
     $("#pane-agent").textContent = w.agent;
     $("#pane-cwd").textContent = short(w.cwd);
     $("#pane-state").outerHTML = stateBadge(w.state).replace('class="state', 'id="pane-state" class="state');
+    for (const b of ["#act-diff", "#act-merge", "#act-discard"]) $(b).hidden = !w.worktree;
     $("#act-transcript").disabled = !w.session_id;
     $("#act-handoff").disabled = !w.session_id;
     if (term.attached !== w.id) connect(w.id);
@@ -297,6 +299,36 @@ $("#act-rename").addEventListener("click", () => {
   const name = w && prompt("Rename window", w.name);
   if (name) act(() => api(`/api/windows/${encodeURIComponent(w.id)}/rename`, { method: "POST", body: { name } }));
 });
+const selectedWin = () => S.state.windows.find((x) => x.id === S.selected);
+$("#act-diff").addEventListener("click", () => openDiff(selectedWin()));
+$("#act-merge").addEventListener("click", () => mergeWin(selectedWin()));
+$("#act-discard").addEventListener("click", () => {
+  const w = selectedWin();
+  if (w && confirm(`Stop ${w.name} and DISCARD its worktree and branch (${w.worktree.label}), including unmerged work?`))
+    act(() => api(`/api/windows/${encodeURIComponent(w.id)}/discard`, { method: "POST", body: {} }), `Discarded ${w.worktree.branch}`);
+});
+$("#diff-close").addEventListener("click", () => $("#dlg-diff").close());
+$("#diff-merge").addEventListener("click", () => { $("#dlg-diff").close(); mergeWin(S.diffWin); });
+
+function mergeWin(w) {
+  if (w && confirm(`Commit and merge ${w.name}'s work (${w.worktree.label}) into ${short(w.worktree.repo)}?`))
+    act(() => api(`/api/windows/${encodeURIComponent(w.id)}/merge`, { method: "POST", body: {} }), (r) => `Merged ${r.merged} into ${short(r.into)}`);
+}
+
+async function openDiff(w) {
+  if (!w) return;
+  let r;
+  try { r = await api(`/api/windows/${encodeURIComponent(w.id)}/diff`); } catch (e) { return toast(e.message, true); }
+  S.diffWin = w;
+  $("#diff-title").textContent = `${w.name} — ${w.worktree.label}`;
+  $("#diff-meta").textContent = `${r.branch} · ${short(w.worktree.path)}`;
+  $("#diff-body").innerHTML = (r.diff || "No changes yet.").split("\n").map((l) => {
+    const c = /^(\+\+\+|---|diff --git)/.test(l) ? "f" : l.startsWith("@@") ? "h" : l.startsWith("+") ? "a" : l.startsWith("-") ? "d" : "";
+    return c ? `<span class="${c}">${esc(l)}</span>` : esc(l);
+  }).join("\n");
+  $("#dlg-diff").showModal();
+}
+
 $("#act-transcript").addEventListener("click", () => {
   const w = S.state.windows.find((x) => x.id === S.selected);
   if (w?.session_id) openTranscript(w.session_id);
@@ -315,10 +347,18 @@ function openNew({ agent, dir } = {}) {
   S.newAgent = agent || S.newAgent || st.default_agent;
   $("#new-agents").innerHTML = st.agents.map((a) =>
     `<button type="button" data-agent="${esc(a.name)}" class="ag-${esc(a.name)} ${a.name === S.newAgent ? "on" : ""}" ${a.installed ? "" : "disabled title='not installed'"}>${esc(a.name)}</button>`).join("");
+  S.fanAgents = new Set([S.newAgent]);
+  $("#new-fan").checked = false;
+  $("#new-wt").checked = false;
   $$("#new-agents button").forEach((b) => b.addEventListener("click", () => {
-    S.newAgent = b.dataset.agent;
-    $$("#new-agents button").forEach((x) => x.classList.toggle("on", x === b));
-    $("#new-rc-wrap").hidden = S.newAgent !== "claude";
+    if ($("#new-fan").checked) {
+      S.fanAgents.has(b.dataset.agent) ? S.fanAgents.delete(b.dataset.agent) : S.fanAgents.add(b.dataset.agent);
+      b.classList.toggle("on", S.fanAgents.has(b.dataset.agent));
+    } else {
+      S.newAgent = b.dataset.agent;
+      $$("#new-agents button").forEach((x) => x.classList.toggle("on", x === b));
+    }
+    $("#new-rc-wrap").hidden = $("#new-fan").checked || S.newAgent !== "claude";
   }));
   const dirs = st.projects.filter((p) => p.exists);
   $("#new-dirs").innerHTML = dirs.map((p) => `<option value="${esc(short(p.cwd))}">`).join("");
@@ -335,16 +375,33 @@ function openNew({ agent, dir } = {}) {
 }
 
 $("#new-btn").addEventListener("click", () => openNew());
+$("#new-fan").addEventListener("change", () => {
+  const fan = $("#new-fan").checked;
+  $("#new-wt").checked = fan || $("#new-wt").checked;
+  $("#new-wt").disabled = fan;
+  S.fanAgents = new Set([S.newAgent]);
+  $$("#new-agents button").forEach((x) => x.classList.toggle("on", x.dataset.agent === S.newAgent));
+  $("#new-go").firstChild.textContent = fan ? "Fan out " : "Start ";
+});
 $("#new-form").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#new-go").click(); }
 });
 $("#new-form").addEventListener("submit", async (e) => {
   if (e.submitter?.value !== "go") return;
   e.preventDefault();
-  const body = { agent: S.newAgent, dir: $("#new-dir").value.trim(), prompt: $("#new-prompt").value.trim(), name: $("#new-name").value.trim() };
-  if (S.newAgent === "claude") body.remote_control = $("#new-rc").checked;
+  const dir = $("#new-dir").value.trim(), prompt = $("#new-prompt").value.trim();
   $("#new-go").disabled = true;
-  const r = await act(() => api("/api/windows", { method: "POST", body }), `Started ${S.newAgent}`);
+  let r;
+  if ($("#new-fan").checked) {
+    if (!prompt) { $("#new-go").disabled = false; return toast("Fan-out needs a task for the agents", true); }
+    const agents = [...S.fanAgents];
+    r = await act(() => api("/api/fanout", { method: "POST", body: { agents, dir, prompt } }), `Fanned out to ${agents.join(", ")}`);
+    if (r) r.window = r.windows[0];
+  } else {
+    const body = { agent: S.newAgent, dir, prompt, name: $("#new-name").value.trim(), worktree: $("#new-wt").checked };
+    if (S.newAgent === "claude") body.remote_control = $("#new-rc").checked;
+    r = await act(() => api("/api/windows", { method: "POST", body }), `Started ${S.newAgent}`);
+  }
   $("#new-go").disabled = false;
   if (r) {
     $("#dlg-new").close();

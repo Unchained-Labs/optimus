@@ -18,6 +18,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/mux"
 	"github.com/Unchained-Labs/optimus/internal/pricing"
 	"github.com/Unchained-Labs/optimus/internal/providers"
+	"github.com/Unchained-Labs/optimus/internal/worktree"
 )
 
 type App struct {
@@ -60,6 +61,8 @@ type LaunchRequest struct {
 	Prompt        string `json:"prompt"`
 	Name          string `json:"name"`
 	RemoteControl *bool  `json:"remote_control,omitempty"`
+	// Worktree runs the agent in its own git worktree and branch.
+	Worktree bool `json:"worktree,omitempty"`
 }
 
 func (a *App) opts(name string, rc *bool) providers.LaunchOpts {
@@ -102,10 +105,30 @@ func (a *App) LaunchWith(r LaunchRequest) (string, error) {
 		name = agent + "-" + model.ProjectName(dir)
 	}
 	name = mux.Sanitize(name)
+	var tree *worktree.Tree
+	if r.Worktree {
+		label := firstWords(prompt, 4) // the branch says what the task is
+		if label == "" {
+			label = strings.TrimPrefix(r.Name, agent+"-")
+		}
+		t, err := worktree.Create(dir, agent, label)
+		if err != nil {
+			return "", err
+		}
+		tree, dir = &t, t.Path
+	}
 	argv := append(append([]string{bin}, extra...), p.NewArgs(argPrompt, sid, a.opts(name, r.RemoteControl))...)
 	id, err := mux.Spawn(name, agent, dir, sid, argv)
 	if err != nil {
+		if tree != nil {
+			_ = tree.Remove(true)
+		}
 		return "", err
+	}
+	if tree != nil {
+		for k, v := range map[string]string{"@optimus_worktree": tree.Path, "@optimus_repo": tree.Repo, "@optimus_base": tree.Base, "@optimus_branch": tree.Branch} {
+			mux.SetWindowOption(id, k, v)
+		}
 	}
 	a.EnsureWeb()
 	if prompt != "" && argPrompt == "" {
@@ -116,6 +139,40 @@ func (a *App) LaunchWith(r LaunchRequest) (string, error) {
 		}
 	}
 	return id, nil
+}
+
+func firstWords(s string, n int) string {
+	f := strings.Fields(s)
+	if len(f) > n {
+		f = f[:n]
+	}
+	return strings.Join(f, " ")
+}
+
+// Tree returns the worktree a window's agent works in, if any.
+func Tree(w mux.Window) (worktree.Tree, bool) {
+	if w.Worktree == "" {
+		return worktree.Tree{}, false
+	}
+	return worktree.Tree{Repo: w.Repo, Path: w.Worktree, Base: w.Base, Branch: w.Branch}, true
+}
+
+// Fanout starts the same task in several agents, each in its own worktree of
+// dir's repository, so their results can be compared and the best merged.
+func (a *App) Fanout(agents []string, dir, prompt string) ([]string, error) {
+	if _, ok := worktree.Root(dir); !ok {
+		return nil, fmt.Errorf("fan-out needs a git repository: %s isn't one", dir)
+	}
+	var ids []string
+	for _, ag := range agents {
+		name := ag + "-" + mux.Sanitize(firstWords(prompt, 3))
+		id, err := a.LaunchWith(LaunchRequest{Agent: ag, Dir: dir, Prompt: prompt, Name: name, Worktree: true})
+		if err != nil {
+			return ids, fmt.Errorf("%s: %w", ag, err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // Resume reopens an existing session in the multiplexer, or returns the
