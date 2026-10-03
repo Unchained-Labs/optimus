@@ -46,3 +46,7 @@ flowchart LR
 - **tmux as the process supervisor.** Agents outlive every UI. Optimus windows carry `@optimus_agent`, `@optimus_cwd` and `@optimus_session` options; background services (the web dashboard) run in a separate `optimus-svc` session that is never listed as an agent.
 - **Browser views are grouped sessions.** Each terminal tab gets its own current window and size, and is removed when the websocket closes. Leftovers from a crash are swept on startup.
 - **Handoffs by reference.** Agents receive a short prompt pointing to the document on disk, so the same mechanism works for every agent.
+
+## Built with
+
+[tmux](https://github.com/tmux/tmux), [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lip Gloss](https://github.com/charmbracelet/lipgloss), [xterm.js](https://xtermjs.org), [coder/websocket](https://github.com/coder/websocket) and [creack/pty](https://github.com/creack/pty). The demo is recorded with [VHS](https://github.com/charmbracelet/vhs), and this site is built with [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/).

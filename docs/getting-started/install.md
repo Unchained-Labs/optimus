@@ -21,6 +21,35 @@ The installer is a short wizard:
 !!! tip "Nothing changes behind your back"
     Without a terminal (CI, provisioning), the installer only edits your shell config with `--yes`, and only touches Claude Code's settings with `--statusline`. Claude Code's `settings.json` is backed up before any change.
 
+## Where it goes
+
+optimus is a single self-contained binary of about 3.5 MB, with no runtime, libraries or `/opt` bundle. It goes in a `bin` folder on your `PATH`:
+
+| Situation | Location |
+|---|---|
+| default | `~/.local/bin/optimus` (just for you, no sudo) |
+| `/usr/local/bin` is writable and `~/.local/bin` doesn't exist | `/usr/local/bin/optimus` |
+| interactive run | the wizard asks, with one of the above pre-filled |
+| `--bin-dir DIR` | wherever you say |
+
+If that folder isn't on your `PATH`, the wizard offers to add it to `~/.zshrc`, `~/.bashrc`, fish or `~/.profile`. Open a new shell (or run `hash -r`) and `optimus` works from anywhere.
+
+### Machine-wide
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Unchained-Labs/optimus/main/install.sh | sudo sh -s -- --bin-dir /usr/local/bin --no-setup
+```
+
+Keep `--no-setup` with `sudo`, so the setup questions don't configure root's account. Each user's config is created on first run.
+
+## Binary or source?
+
+The installer **downloads the prebuilt binary** for your platform (Linux or macOS, amd64 or arm64) from the [latest release](https://github.com/Unchained-Labs/optimus/releases) and checks its SHA-256 against the release's `checksums.txt`. It only builds from source, which needs Go 1.25+, when:
+
+- you pass `--from-source`,
+- no binary exists for your platform, or
+- you run `sh install.sh` from inside a git checkout (it builds that checkout).
+
 ## Options
 
 | Flag | Env | Meaning |
