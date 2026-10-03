@@ -27,6 +27,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/providers"
 	"github.com/Unchained-Labs/optimus/internal/ratelimits"
 	"github.com/Unchained-Labs/optimus/internal/usage"
+	"github.com/Unchained-Labs/optimus/internal/worktree"
 )
 
 //go:embed static
@@ -84,6 +85,10 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/windows/{id}/rename", s.rename)
 	api.HandleFunc("DELETE /api/windows/{id}", s.kill)
 	api.HandleFunc("GET /api/windows/{id}/screen", s.screen)
+	api.HandleFunc("GET /api/windows/{id}/diff", s.diff)
+	api.HandleFunc("POST /api/windows/{id}/merge", s.merge)
+	api.HandleFunc("POST /api/windows/{id}/discard", s.discard)
+	api.HandleFunc("POST /api/fanout", s.fanout)
 	api.HandleFunc("GET /api/usage", s.usage)
 	api.HandleFunc("GET /api/term/{id}", s.term)
 	m.Handle("/api/", s.auth(api))
@@ -186,6 +191,15 @@ type windowView struct {
 	SessionID string    `json:"session_id,omitempty"`
 	Title     string    `json:"title,omitempty"`
 	Cost      float64   `json:"cost"`
+	Worktree  *treeView `json:"worktree,omitempty"`
+}
+
+type treeView struct {
+	Path   string         `json:"path"`
+	Repo   string         `json:"repo"`
+	Branch string         `json:"branch"`
+	Stats  worktree.Stats `json:"stats"`
+	Label  string         `json:"label"`
 }
 
 type sessionView struct {
@@ -266,6 +280,10 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		screen, _ := mux.Capture(x.ID, 30)
 		info := agentstate.Resolve(x, screen)
 		v := windowView{ID: x.ID, Index: x.Index, Name: x.Name, Agent: x.Agent, Cwd: x.Cwd, State: info.State, Message: info.Message, Since: info.Since, Activity: x.Activity, Created: x.Created, SessionID: x.SessionID}
+		if t, ok := app.Tree(x); ok {
+			st, _ := t.Stats()
+			v.Worktree = &treeView{Path: t.Path, Repo: t.Repo, Branch: t.Branch, Stats: st, Label: st.String()}
+		}
 		if sess := idx.ForWindow(x.Agent, x.Cwd, x.SessionID, x.Created); sess != nil {
 			v.SessionID, v.Title, v.Cost = sess.ID, sess.DisplayTitle(), sess.Cost
 			managed[sess.ID] = true
@@ -571,6 +589,78 @@ func (s *Server) screen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"screen": out, "state": agentstate.Resolve(win, out).State})
+}
+
+func treeFor(w http.ResponseWriter, r *http.Request) (mux.Window, worktree.Tree, bool) {
+	win, ok := window(w, r)
+	if !ok {
+		return win, worktree.Tree{}, false
+	}
+	t, ok := app.Tree(win)
+	if !ok {
+		httpErr(w, http.StatusBadRequest, win.Name+" doesn't run in its own worktree")
+	}
+	return win, t, ok
+}
+
+func (s *Server) diff(w http.ResponseWriter, r *http.Request) {
+	_, t, ok := treeFor(w, r)
+	if !ok {
+		return
+	}
+	d, err := t.Diff()
+	if err != nil {
+		httpErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"diff": d, "branch": t.Branch})
+}
+
+func (s *Server) merge(w http.ResponseWriter, r *http.Request) {
+	win, t, ok := treeFor(w, r)
+	if !ok {
+		return
+	}
+	if err := t.Merge(true, "optimus: work from "+win.Name+" ("+win.Agent+")"); err != nil {
+		httpErr(w, http.StatusConflict, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"merged": t.Branch, "into": t.Repo})
+}
+
+func (s *Server) discard(w http.ResponseWriter, r *http.Request) {
+	win, t, ok := treeFor(w, r)
+	if !ok {
+		return
+	}
+	if err := t.Remove(true); err != nil {
+		httpErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	_ = mux.Kill(win.ID)
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func (s *Server) fanout(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Agents []string `json:"agents"`
+		Dir    string   `json:"dir"`
+		Prompt string   `json:"prompt"`
+	}
+	if err := readJSON(r, &req); err != nil || len(req.Agents) == 0 || strings.TrimSpace(req.Prompt) == "" {
+		httpErr(w, http.StatusBadRequest, "agents and a task are required")
+		return
+	}
+	if strings.HasPrefix(req.Dir, "~") {
+		home, _ := os.UserHomeDir()
+		req.Dir = home + strings.TrimPrefix(req.Dir, "~")
+	}
+	ids, err := s.app.Fanout(req.Agents, req.Dir, req.Prompt)
+	if err != nil {
+		httpErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"windows": ids})
 }
 
 type usageRow struct {

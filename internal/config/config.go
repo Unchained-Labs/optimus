@@ -133,6 +133,14 @@ func CacheDir() string {
 	return filepath.Join(xdg("XDG_CACHE_HOME", ".cache"), "optimus")
 }
 
+// DataDir holds data optimus creates for you, such as agent worktrees.
+func DataDir() string {
+	if v := os.Getenv("OPTIMUS_HOME"); v != "" {
+		return filepath.Join(v, "data")
+	}
+	return filepath.Join(xdg("XDG_DATA_HOME", ".local/share"), "optimus")
+}
+
 func Path() string          { return filepath.Join(Dir(), "config.json") }
 func WebTokenFile() string  { return filepath.Join(StateDir(), "web-token") }
 func HandoffDir() string    { return filepath.Join(StateDir(), "handoffs") }

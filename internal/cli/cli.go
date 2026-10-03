@@ -37,7 +37,10 @@ Usage:
  Multiplexer
   optimus claude|codex|… [dir]    start that agent here and attach  (-p PROMPT, -d to stay detached)
   optimus new [agent] [dir]       start an agent (default: config default_agent)
-        --name N --prompt P --attach
+        --name N --prompt P --attach --worktree (own git worktree + branch)
+  optimus fanout "task"           same task to several agents, each in its own worktree (--agents claude,codex)
+  optimus compare                 agents in worktrees side by side: state, changes, branch
+  optimus wt diff|merge|rm W      review, merge (--commit) or discard (--force) an agent's worktree
   optimus ps                      list running agents (optimus windows + other live sessions)
   optimus attach [window]         attach to a window (Alt-q to come back)
   optimus peek <window> [-n 40]   print the bottom of a window's screen
@@ -121,6 +124,12 @@ func Run(args []string) int {
 		err = cmdNext(rest)
 	case "answer":
 		err = cmdAnswer(rest)
+	case "wt", "worktree":
+		err = cmdWorktree(rest)
+	case "fanout", "fan-out":
+		err = cmdFanout(a, rest)
+	case "compare":
+		err = cmdCompare(rest)
 	case "watch":
 		err = cmdWatch(a)
 	case "web", "serve", "ui-web":
@@ -534,6 +543,7 @@ func cmdNew(a *app.App, args []string) error {
 	name := fs.String("name", "", "window name")
 	prompt := fs.String("prompt", "", "initial prompt")
 	attach := fs.Bool("attach", false, "attach after starting")
+	wt := fs.Bool("worktree", false, "run in a new git worktree and branch")
 	pos := parse(fs, args)
 	// `optimus new`, `optimus new ~/dir` and `optimus new codex ~/dir` all work
 	if len(pos) == 0 || providers.Get(pos[0]) == nil {
@@ -543,7 +553,7 @@ func cmdNew(a *app.App, args []string) error {
 	if len(pos) > 1 {
 		dir = pos[1]
 	}
-	id, err := a.Launch(pos[0], absDir(dir), *prompt, *name)
+	id, err := a.LaunchWith(app.LaunchRequest{Agent: pos[0], Dir: absDir(dir), Prompt: *prompt, Name: *name, Worktree: *wt})
 	if err != nil {
 		return err
 	}

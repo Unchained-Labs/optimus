@@ -26,6 +26,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/notify"
 	"github.com/Unchained-Labs/optimus/internal/providers"
 	"github.com/Unchained-Labs/optimus/internal/ratelimits"
+	"github.com/Unchained-Labs/optimus/internal/worktree"
 )
 
 type tab int
@@ -92,6 +93,7 @@ type Model struct {
 	windows []mux.Window
 	states  map[string]mux.State
 	infos   map[string]agentstate.Info
+	wtStats map[string]string
 	preview string
 	wCur    int
 	marked  map[string]bool
@@ -114,6 +116,7 @@ type Model struct {
 	onInput     func(m *Model, v string) tea.Cmd
 	confirmText string
 	onConfirm   func(m *Model) tea.Cmd
+	onDeny      func(m *Model) tea.Cmd // optional: run on "no"
 	detail      viewport.Model
 	detailSess  *model.Session
 
@@ -138,6 +141,7 @@ type windowsMsg struct {
 	ws      []mux.Window
 	states  map[string]mux.State
 	infos   map[string]agentstate.Info
+	wtStats map[string]string
 	preview string
 	err     error
 }
@@ -148,6 +152,11 @@ type doneMsg struct {
 	reload bool
 }
 type attachedMsg struct{ err error }
+type diffMsg struct {
+	w    mux.Window
+	diff string
+	err  error
+}
 type transcriptMsg struct {
 	s    *model.Session
 	msgs []model.Message
@@ -209,6 +218,7 @@ func (m *Model) pollWindows() tea.Cmd {
 		ws, err := mux.List()
 		states := map[string]mux.State{}
 		infos := map[string]agentstate.Info{}
+		wtStats := map[string]string{}
 		preview := ""
 		if sel == "" && len(ws) > 0 {
 			sel = ws[0].ID
@@ -217,11 +227,16 @@ func (m *Model) pollWindows() tea.Cmd {
 			screen, _ := mux.Capture(w.ID, lines)
 			info := agentstate.Resolve(w, screen)
 			states[w.ID], infos[w.ID] = info.State, info
+			if t, ok := app.Tree(w); ok {
+				if st, err := t.Stats(); err == nil {
+					wtStats[w.ID] = st.String()
+				}
+			}
 			if w.ID == sel {
 				preview = screen
 			}
 		}
-		return windowsMsg{ws: ws, states: states, infos: infos, preview: preview, err: err}
+		return windowsMsg{ws: ws, states: states, infos: infos, wtStats: wtStats, preview: preview, err: err}
 	}
 }
 
@@ -258,7 +273,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if w := m.selectedWindow(); w != nil {
 				cur = w.ID
 			}
-			m.windows, m.states, m.infos, m.preview = msg.ws, msg.states, msg.infos, msg.preview
+			m.windows, m.states, m.infos, m.wtStats, m.preview = msg.ws, msg.states, msg.infos, msg.wtStats, msg.preview
 			for i, w := range m.windows {
 				if w.ID == cur {
 					m.wCur = i
@@ -294,6 +309,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loading = true
 		return m, tea.Batch(m.loadIndex(), m.pollWindows(), tea.ClearScreen)
+
+	case diffMsg:
+		m.busy = ""
+		if msg.err != nil {
+			m.flash(msg.err.Error(), true)
+			return m, nil
+		}
+		if strings.TrimSpace(msg.diff) == "" {
+			m.flash(msg.w.Name+" hasn't changed anything yet", false)
+			return m, nil
+		}
+		m.detailSess = &model.Session{Agent: msg.w.Agent, Title: msg.w.Name + " · " + msg.w.Branch, Cwd: msg.w.Worktree}
+		m.detail = viewport.New(m.w-4, m.h-5)
+		m.detail.SetContent(colorDiff(msg.diff))
+		m.mode = modeDetail
+		return m, nil
 
 	case transcriptMsg:
 		m.busy = ""
@@ -364,8 +395,13 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case modeConfirm:
 		m.mode = modeNormal
+		deny := m.onDeny
+		m.onDeny = nil
 		if key == "y" || key == "Y" || key == "enter" {
 			return m, m.onConfirm(m)
+		}
+		if deny != nil && key != "esc" {
+			return m, deny(m)
 		}
 		return m, nil
 	case modeHelp:
@@ -395,6 +431,13 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "esc", "q", "backspace":
 			m.mode = modeNormal
 			return m, nil
+		}
+		if m.detailSess == nil || m.detailSess.ID == "" { // a diff, not a session
+			var cmd tea.Cmd
+			m.detail, cmd = m.detail.Update(k)
+			return m, cmd
+		}
+		switch key {
 		case "r":
 			return m, m.resume(m.detailSess)
 		case "h":
@@ -465,6 +508,8 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "N":
 		agent, dir := m.app.Cfg.Agent(), m.contextDir()
 		return m, m.launch(agent, dir)
+	case "F":
+		return m, m.fanout()
 	case "w":
 		m.busy = "starting the web dashboard…"
 		a := m.app
@@ -585,6 +630,18 @@ func (m *Model) keyAgents(key string) (tea.Model, tea.Cmd) {
 		if w != nil {
 			m.mode = modeAnswer
 			return m, m.pollWindows()
+		}
+	case "D":
+		if w != nil {
+			return m, m.wtDiff(*w)
+		}
+	case "M":
+		if w != nil {
+			return m, m.wtMerge(*w)
+		}
+	case "X":
+		if w != nil {
+			return m, m.wtRemove(*w)
 		}
 	case "enter", "a", "l", "right":
 		if w != nil {
@@ -926,13 +983,98 @@ func (m *Model) dirPicker(agent string) {
 	})
 }
 
+// launch starts an agent; in a git repository it first asks whether the
+// agent should get its own worktree.
 func (m *Model) launch(agent, dir string) tea.Cmd {
+	if _, ok := worktree.Root(dir); ok {
+		m.confirm("Run "+agent+" in its own git worktree and branch? (y/N, esc cancels)", func(m *Model) tea.Cmd {
+			return m.doLaunch(agent, dir, true)
+		})
+		m.onDeny = func(m *Model) tea.Cmd { return m.doLaunch(agent, dir, false) }
+		return nil
+	}
+	return m.doLaunch(agent, dir, false)
+}
+
+func (m *Model) doLaunch(agent, dir string, wt bool) tea.Cmd {
 	m.busy = "starting " + agent + "…"
 	a := m.app
 	return func() tea.Msg {
-		id, err := a.Launch(agent, dir, "", "")
+		id, err := a.LaunchWith(app.LaunchRequest{Agent: agent, Dir: dir, Worktree: wt})
 		return doneMsg{text: "started " + agent + " in " + shortHome(dir), err: err, attach: id}
 	}
+}
+
+// fanout asks for agents and a task, then starts each agent in its own
+// worktree of the current project.
+func (m *Model) fanout() tea.Cmd {
+	dir := m.contextDir()
+	if _, ok := worktree.Root(dir); !ok {
+		m.flash("fan-out needs a git repository: "+shortHome(dir)+" isn't one", true)
+		return nil
+	}
+	m.askInput("Fan out in "+shortHome(dir)+": which agents?", "claude,codex", func(m *Model, agents string) tea.Cmd {
+		m.askInput("Task for "+agents, "", func(m *Model, task string) tea.Cmd {
+			if strings.TrimSpace(task) == "" {
+				return nil
+			}
+			m.busy = "fanning out…"
+			a := m.app
+			return func() tea.Msg {
+				ids, err := a.Fanout(strings.Split(agents, ","), dir, task)
+				return doneMsg{text: fmt.Sprintf("started %d agents in their own worktrees — compare them in the Agents view", len(ids)), err: err}
+			}
+		})
+		return textinput.Blink
+	})
+	return textinput.Blink
+}
+
+// worktree actions on the selected agent
+func (m *Model) wtDiff(w mux.Window) tea.Cmd {
+	t, ok := app.Tree(w)
+	if !ok {
+		m.flash(w.Name+" doesn't run in its own worktree", true)
+		return nil
+	}
+	m.busy = "loading diff…"
+	return func() tea.Msg {
+		d, err := t.Diff()
+		return diffMsg{w: w, diff: d, err: err}
+	}
+}
+
+func (m *Model) wtMerge(w mux.Window) tea.Cmd {
+	t, ok := app.Tree(w)
+	if !ok {
+		m.flash(w.Name+" doesn't run in its own worktree", true)
+		return nil
+	}
+	m.confirm(fmt.Sprintf("Merge %s's work (%s) into %s, committing its changes? (y/N)", w.Name, m.wtStats[w.ID], shortHome(t.Repo)), func(m *Model) tea.Cmd {
+		return func() tea.Msg {
+			err := t.Merge(true, "optimus: work from "+w.Name+" ("+w.Agent+")")
+			return doneMsg{text: "merged " + t.Branch + " into " + shortHome(t.Repo), err: err}
+		}
+	})
+	return nil
+}
+
+func (m *Model) wtRemove(w mux.Window) tea.Cmd {
+	t, ok := app.Tree(w)
+	if !ok {
+		m.flash(w.Name+" doesn't run in its own worktree", true)
+		return nil
+	}
+	m.confirm(fmt.Sprintf("Stop %s and DISCARD its worktree and branch, including unmerged work? (y/N)", w.Name), func(m *Model) tea.Cmd {
+		return func() tea.Msg {
+			if err := t.Remove(true); err != nil {
+				return doneMsg{err: err}
+			}
+			_ = mux.Kill(w.ID)
+			return doneMsg{text: "discarded " + t.Branch}
+		}
+	})
+	return nil
 }
 
 // --- modal helpers ---------------------------------------------------------------------

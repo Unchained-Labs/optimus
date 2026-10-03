@@ -155,7 +155,7 @@ func (m *Model) viewFooter() string {
 	var keys [][2]string
 	switch m.tab {
 	case tabAgents:
-		keys = [][2]string{{"enter", "attach"}, {"i", "next ◆"}, {"!", "answer"}, {"n", "new"}, {"s", "send"}, {"b", "broadcast"}, {"space", "mark"}, {"h", "handoff"}, {"o", "transcript"}, {"r", "rename"}, {"x", "kill"}}
+		keys = [][2]string{{"enter", "attach"}, {"i", "next ◆"}, {"!", "answer"}, {"F", "fan out"}, {"D/M/X", "diff/merge/discard"}, {"n", "new"}, {"s", "send"}, {"b", "broadcast"}, {"space", "mark"}, {"h", "handoff"}, {"o", "transcript"}, {"r", "rename"}, {"x", "kill"}}
 	case tabSessions:
 		keys = [][2]string{{"enter", "view"}, {"r", "resume"}, {"h", "handoff"}, {"H", "summarized handoff"}, {"y", "copy ctx"}, {"/", "filter"}, {"a", "agent"}, {"p", "project"}}
 	case tabProjects:
@@ -222,6 +222,9 @@ func (m *Model) viewAgents() string {
 		}
 		line1 := mark + sDim.Render(fmt.Sprintf("%d ", w.Index)) + sBold.Render(cell(w.Name, leftW-18)) + " " + stateBadge(m.states[w.ID])
 		line2 := "    " + agentStyle(w.Agent).Render(w.Agent) + sDim.Render(" · "+shortHome(w.Cwd)+" · "+ago(w.Activity))
+		if st, ok := m.wtStats[w.ID]; ok {
+			line2 = "    " + agentStyle(w.Agent).Render(w.Agent) + sDim.Render(" · ") + lipgloss.NewStyle().Foreground(cTeal).Render("⎇ "+st)
+		}
 		if info := m.infos[w.ID]; info.State == mux.StateWaiting && info.Message != "" {
 			line2 = "    " + lipgloss.NewStyle().Foreground(cRed).Render("◆ "+info.Message)
 		}
@@ -549,7 +552,7 @@ func (m *Model) viewHelp() string {
 		keys  [][2]string
 	}{
 		{"Everywhere", [][2]string{{"1-4 / tab", "switch view"}, {"j k ↑ ↓", "move"}, {"n", "start an agent (pick which and where)"}, {"N", "start your default agent in this project, now"}, {"w", "open the web dashboard (phone/browser remote)"}, {"R", "rescan sessions"}, {"q", "quit (agents keep running)"}}},
-		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"!", "answer it without attaching: shows its question, forwards 1/2/3, y/n, enter"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
+		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"!", "answer it without attaching: shows its question, forwards 1/2/3, y/n, enter"}, {"F", "fan out: same task to several agents, each in its own worktree"}, {"D / M / X", "worktree agents: review diff / merge into the repo / discard"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
 		{"Sessions", [][2]string{{"enter", "read transcript"}, {"r", "resume in the multiplexer"}, {"h", "hand off context to a new agent, a running one, clipboard or file"}, {"H", "same, condensed by an agent first"}, {"y", "copy handoff to clipboard"}, {"/ a p esc", "filter text / agent / project / clear"}}},
 		{"Projects", [][2]string{{"enter", "sessions of this project"}, {"c", "start an agent here"}}},
 	}
@@ -573,6 +576,27 @@ func (m *Model) viewDetail() string {
 		sDim.Render(fmt.Sprintf("  %s · %s · %s", shortHome(s.Cwd), format.Money(s.Cost), s.ShortID()))
 	foot := sKey.Render("r") + sDim.Render(" resume  ") + sKey.Render("h") + sDim.Render(" handoff  ") + sKey.Render("H") + sDim.Render(" summarized  ") + sKey.Render("y") + sDim.Render(" copy ctx  ") + sKey.Render("esc") + sDim.Render(" back  ") + sDim.Render(fmt.Sprintf("%3.0f%%", m.detail.ScrollPercent()*100))
 	return cell(head, m.w) + "\n" + sDim.Render(strings.Repeat("─", m.w)) + "\n" + lipgloss.NewStyle().PaddingLeft(2).Render(m.detail.View()) + "\n" + cell(foot, m.w)
+}
+
+// colorDiff colors a unified diff for the viewer.
+func colorDiff(d string) string {
+	add := lipgloss.NewStyle().Foreground(cGreen)
+	del := lipgloss.NewStyle().Foreground(cRed)
+	hunk := lipgloss.NewStyle().Foreground(cMauve)
+	lines := strings.Split(d, "\n")
+	for i, l := range lines {
+		switch {
+		case strings.HasPrefix(l, "+++"), strings.HasPrefix(l, "---"), strings.HasPrefix(l, "diff --git"):
+			lines[i] = sBold.Render(l)
+		case strings.HasPrefix(l, "@@"):
+			lines[i] = hunk.Render(l)
+		case strings.HasPrefix(l, "+"):
+			lines[i] = add.Render(l)
+		case strings.HasPrefix(l, "-"):
+			lines[i] = del.Render(l)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func renderTranscript(s *model.Session, msgs []model.Message, width int) string {
