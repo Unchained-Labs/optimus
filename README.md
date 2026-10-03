@@ -16,6 +16,8 @@ See what they cost, how much quota is left, and hand context from one session to
 
 <img src="demo/optimus.gif" alt="optimus demo: terminal dashboard, browser dashboard and phone view" width="900">
 
+<sub>▶ <a href="demo/optimus.mp4"><b>Watch the full demo</b></a> (3 min: terminal, browser, phone) · recorded with mock agents on synthetic data</sub>
+
 </div>
 
 ## What it does
@@ -62,11 +64,19 @@ Works with **Claude Code**, **Codex** and **opencode** (history, cost, resume), 
 | [Sessions & handoff](https://unchained-labs.github.io/optimus/guide/sessions/) | history, resume, moving context between agents |
 | [Costs & quota](https://unchained-labs.github.io/optimus/guide/usage/) | spend, 5-hour blocks, real quota, budgets |
 | [Configuration](https://unchained-labs.github.io/optimus/guide/configuration/) | every setting, environment variables, files |
-| [CLI reference](https://unchained-labs.github.io/optimus/reference/cli/) · [Architecture](https://unchained-labs.github.io/optimus/reference/architecture/) · [Security](SECURITY.md) · [FAQ](https://unchained-labs.github.io/optimus/faq/) | the deep end |
+| [CLI reference](https://unchained-labs.github.io/optimus/reference/cli/) · [Architecture](https://unchained-labs.github.io/optimus/reference/architecture/) · [FAQ](https://unchained-labs.github.io/optimus/faq/) | the deep end |
 
-## Contributing
+## Community
 
-Issues and PRs are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, a safe demo environment and how to add an agent. Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+optimus is open source and contributions are welcome, from bug reports to new agent integrations.
+
+- **Contribute:** read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, a safe demo environment, and how to add an agent.
+- **Report a bug or request a feature:** [open an issue](https://github.com/Unchained-Labs/optimus/issues/new/choose).
+- **Ask questions or share how you use it:** [Discussions](https://github.com/Unchained-Labs/optimus/discussions).
+- **Security issues:** report privately; see [SECURITY.md](SECURITY.md).
+- **What's new:** [CHANGELOG.md](CHANGELOG.md) · [Releases](https://github.com/Unchained-Labs/optimus/releases).
+
+Everyone taking part agrees to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
