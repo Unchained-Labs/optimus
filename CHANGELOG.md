@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 - Reliable agent states from the agents themselves: Claude Code sessions get lifecycle hooks via `--settings`, Codex gets a `notify` program; *needs input* now shows the actual question ("wants to use Write: hello.txt").
 - Notifications when an agent needs input or finishes: desktop, multiplexer status line, browser, and optional phone push via ntfy (`optimus watch`, `notifications.*` config).
+- Answer an agent without attaching: `!` in the terminal dashboard shows its question and forwards the next key; `optimus answer <window> <key>`.
 - Jump to the next agent waiting for you: `Alt-n` anywhere in the multiplexer, `i` in the dashboards, `optimus next`.
 
 ### Fixed

@@ -44,6 +44,7 @@ Usage:
   optimus send <window|all> TEXT  type a prompt into one or all agents  (--no-enter)
   optimus kill <window>           stop an agent window
   optimus next [--switch]         the agents waiting for you (Alt-n jumps to the next one)
+  optimus answer <window> KEY…    answer a prompt without attaching (e.g. 1, y, Enter, Escape)
   optimus watch                   notify on input / finished turns (also runs inside web and the TUI)
   optimus resume <session>        reopen a past session in the multiplexer (--attach)
 
@@ -118,6 +119,8 @@ func Run(args []string) int {
 		err = cmdHook(rest)
 	case "next":
 		err = cmdNext(rest)
+	case "answer":
+		err = cmdAnswer(rest)
 	case "watch":
 		err = cmdWatch(a)
 	case "web", "serve", "ui-web":

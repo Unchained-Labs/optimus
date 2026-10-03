@@ -49,6 +49,7 @@ const (
 	modeDetail       // transcript viewer
 	modeFilter       // typing into the sessions filter
 	modeHelp
+	modeAnswer // forwarding keys to an agent that waits for an answer
 )
 
 // pickItem is one row of a picker.
@@ -370,6 +371,8 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case modeHelp:
 		m.mode = modeNormal
 		return m, nil
+	case modeAnswer:
+		return m.keyAnswer(key)
 	case modeFilter:
 		switch key {
 		case "esc":
@@ -545,9 +548,44 @@ func openBrowser(u string) {
 
 // --- agents tab -----------------------------------------------------------------
 
+// answerKeys maps dashboard keys to the tmux keys forwarded in answer mode.
+var answerKeys = map[string]string{
+	"1": "1", "2": "2", "3": "3", "y": "y", "n": "n", "enter": "Enter", "tab": "Tab", "shift+tab": "BTab",
+	"up": "Up", "down": "Down", "left": "Left", "right": "Right", "backspace": "BSpace",
+}
+
+func (m *Model) keyAnswer(key string) (tea.Model, tea.Cmd) {
+	w := m.selectedWindow()
+	if key == "esc" || w == nil {
+		m.mode = modeNormal
+		return m, nil
+	}
+	tk, ok := answerKeys[key]
+	if !ok {
+		return m, nil
+	}
+	id := w.ID
+	// arrows navigate a menu: stay in answer mode; anything else answers
+	if tk != "Up" && tk != "Down" && tk != "Left" && tk != "Right" {
+		m.mode = modeNormal
+	}
+	return m, func() tea.Msg {
+		if err := mux.Keys(id, tk); err != nil {
+			return doneMsg{err: err}
+		}
+		time.Sleep(150 * time.Millisecond)
+		return doneMsg{}
+	}
+}
+
 func (m *Model) keyAgents(key string) (tea.Model, tea.Cmd) {
 	w := m.selectedWindow()
 	switch key {
+	case "!":
+		if w != nil {
+			m.mode = modeAnswer
+			return m, m.pollWindows()
+		}
 	case "enter", "a", "l", "right":
 		if w != nil {
 			return m, m.attach(w.ID)

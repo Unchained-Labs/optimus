@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/format"
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
@@ -64,6 +65,8 @@ func (m *Model) View() string {
 		return overlay(screen, sModal.Render(sWarn.Render(m.confirmText)), m.w, m.h)
 	case modeHelp:
 		return overlay(screen, m.viewHelp(), m.w, m.h)
+	case modeAnswer:
+		return overlay(screen, m.viewAnswer(), m.w, m.h)
 	}
 	return screen
 }
@@ -152,7 +155,7 @@ func (m *Model) viewFooter() string {
 	var keys [][2]string
 	switch m.tab {
 	case tabAgents:
-		keys = [][2]string{{"enter", "attach"}, {"i", "next ◆"}, {"n", "new"}, {"s", "send"}, {"b", "broadcast"}, {"space", "mark"}, {"h", "handoff"}, {"o", "transcript"}, {"r", "rename"}, {"x", "kill"}}
+		keys = [][2]string{{"enter", "attach"}, {"i", "next ◆"}, {"!", "answer"}, {"n", "new"}, {"s", "send"}, {"b", "broadcast"}, {"space", "mark"}, {"h", "handoff"}, {"o", "transcript"}, {"r", "rename"}, {"x", "kill"}}
 	case tabSessions:
 		keys = [][2]string{{"enter", "view"}, {"r", "resume"}, {"h", "handoff"}, {"H", "summarized handoff"}, {"y", "copy ctx"}, {"/", "filter"}, {"a", "agent"}, {"p", "project"}}
 	case tabProjects:
@@ -166,6 +169,27 @@ func (m *Model) viewFooter() string {
 		parts = append(parts, sKey.Render(k[0])+" "+sDim.Render(k[1]))
 	}
 	return cell(strings.Join(parts, "  "), m.w)
+}
+
+// viewAnswer shows an agent's pending question and forwards the next key.
+func (m *Model) viewAnswer() string {
+	w := m.selectedWindow()
+	if w == nil {
+		return ""
+	}
+	bw := min(m.w-6, 100)
+	var b strings.Builder
+	info := m.infos[w.ID]
+	title := "Answer " + w.Name
+	if info.State == mux.StateWaiting && info.Message != "" {
+		title += " — " + info.Message
+	}
+	b.WriteString(sTitle.Render(model.Truncate(title, bw-6)) + "\n\n")
+	for _, l := range agentstate.Prompt(m.preview, 12) {
+		b.WriteString(sText.Render(cell(strings.ReplaceAll(l, "\t", "    "), bw-6)) + "\n")
+	}
+	b.WriteString("\n" + sKey.Render("1 2 3 y n enter tab") + sDim.Render(" answer  ") + sKey.Render("↑↓") + sDim.Render(" move  ") + sKey.Render("esc") + sDim.Render(" close"))
+	return sModal.Width(bw).Render(b.String())
 }
 
 // --- agents -------------------------------------------------------------------------
@@ -525,7 +549,7 @@ func (m *Model) viewHelp() string {
 		keys  [][2]string
 	}{
 		{"Everywhere", [][2]string{{"1-4 / tab", "switch view"}, {"j k ↑ ↓", "move"}, {"n", "start an agent (pick which and where)"}, {"N", "start your default agent in this project, now"}, {"w", "open the web dashboard (phone/browser remote)"}, {"R", "rescan sessions"}, {"q", "quit (agents keep running)"}}},
-		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
+		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"!", "answer it without attaching: shows its question, forwards 1/2/3, y/n, enter"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
 		{"Sessions", [][2]string{{"enter", "read transcript"}, {"r", "resume in the multiplexer"}, {"h", "hand off context to a new agent, a running one, clipboard or file"}, {"H", "same, condensed by an agent first"}, {"y", "copy handoff to clipboard"}, {"/ a p esc", "filter text / agent / project / clear"}}},
 		{"Projects", [][2]string{{"enter", "sessions of this project"}, {"c", "start an agent here"}}},
 	}

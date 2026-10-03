@@ -138,3 +138,16 @@ func cmdWatch(a *app.App) error {
 		}
 	}
 }
+
+// cmdAnswer sends answer keys to an agent without attaching to it, e.g.
+// `optimus answer 2 1` picks option 1 of the prompt in window 2.
+func cmdAnswer(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: optimus answer <window> <key>...   (keys: 1 2 3 y n Enter Escape Tab Up Down C-c)")
+	}
+	w, err := mux.Resolve(args[0])
+	if err != nil {
+		return err
+	}
+	return mux.Keys(w.ID, args[1:]...)
+}

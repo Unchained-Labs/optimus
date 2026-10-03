@@ -46,3 +46,15 @@ optimus config set notifications.ntfy https://ntfy.sh/<a-long-secret-topic>
 | shell | `optimus next` lists them, longest waiting first |
 
 Pressing it again cycles through all waiting agents. Answer, ++alt+n++, answer: that's the whole loop.
+
+## Answer without attaching
+
+Most interruptions are a single keystroke: approve a command, pick option 1. You don't need to attach for that:
+
+| Where | How |
+|---|---|
+| terminal dashboard | select the agent (++i++ jumps to the next waiting one), press ++exclamation++. A box shows its question; the next key (++1++ ++2++ ++3++ ++y++ ++n++ ++enter++ ++tab++) goes straight to the agent, ++up++ / ++down++ move through its menu, ++esc++ closes. |
+| browser / phone | the key buttons under the terminal (Esc, ↵, ↑ ↓, Tab, 1 2 3, y n, ^C) |
+| shell | `optimus answer 2 1`, `optimus answer web-login y`, `optimus answer 3 Down Enter` |
+
+The full loop is: ++i++, ++exclamation++, ++1++, ++i++ … with no attaching anywhere.
