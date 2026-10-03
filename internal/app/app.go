@@ -29,6 +29,9 @@ type App struct {
 
 func New() *App {
 	cfg, err := config.Load()
+	if cfg.Attach != "" {
+		mux.AttachMode = cfg.Attach
+	}
 	return &App{Cfg: cfg, Prices: pricing.New(cfg.Pricing), CfgErr: err}
 }
 

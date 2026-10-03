@@ -54,7 +54,10 @@ type Notifications struct {
 }
 
 type Config struct {
-	DefaultAgent  string           `json:"default_agent,omitempty"`
+	DefaultAgent string `json:"default_agent,omitempty"`
+	// Attach: how to show an agent when optimus runs inside your own tmux:
+	// "auto" (default: popup on tmux 3.2+), "popup" or "nested".
+	Attach        string           `json:"attach,omitempty"`
 	Notifications Notifications    `json:"notifications"`
 	Remote        Remote           `json:"remote"`
 	Budgets       Budgets          `json:"budgets"`

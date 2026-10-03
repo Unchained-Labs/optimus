@@ -23,6 +23,15 @@ Agents run inside a private tmux server (`tmux -L optimus`), separate from your 
 - ++enter++ attaches you to an agent's real terminal, ++alt+q++ brings you back, and ++alt+left++ / ++alt+right++ switches agents while attached;
 - the browser dashboard and the CLI see the same agents.
 
+### Inside your own tmux
+
+If you run optimus from inside your own tmux (3.2 or newer), attaching opens the agent in a **popup** over your current pane instead of nesting tmux inside tmux. ++alt+q++ closes it and the agent keeps running. Choose the behaviour with:
+
+```sh
+optimus config set attach popup    # always a popup (auto: popup when possible, the default)
+optimus config set attach nested   # classic tmux-in-tmux
+```
+
 ### Agent state
 
 | Badge | Meaning |

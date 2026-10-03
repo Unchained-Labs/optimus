@@ -346,6 +346,9 @@ func Rename(id, name string) error {
 // AttachCmd returns a command that attaches the terminal to a window. The
 // caller runs it in the foreground; it returns when the user detaches.
 func AttachCmd(id string) *exec.Cmd {
+	if UsePopup() {
+		return PopupCmd(id)
+	}
 	_, _ = run("select-window", "-t", id)
 	cmd := tmux("attach-session", "-t", "="+Session)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -444,6 +447,9 @@ func StopService(name string) error {
 // "[detached (from session …)]" line tmux prints, so it doesn't pile up in the
 // terminal once the dashboard exits.
 func AttachCmdQuiet(id string) *exec.Cmd {
+	if UsePopup() {
+		return PopupCmd(id) // no "[detached]" line to clean up
+	}
 	base := AttachCmd(id)
 	cmd := exec.Command("sh", append([]string{"-c", `"$@"; s=$?; printf '\033[1A\033[2K'; exit $s`, "sh"}, base.Args...)...)
 	cmd.Env = base.Env
