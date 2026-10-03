@@ -105,6 +105,7 @@ nav:
       - Agents: reference/agents.md
       - Architecture: reference/architecture.md
       - Security: reference/security.md
+  - FAQ: faq.md
   - Project:
       - Contributing: project/contributing.md
       - Changelog: project/changelog.md
