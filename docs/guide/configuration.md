@@ -16,6 +16,7 @@ optimus config set KEY VALUE
     "web_autostart": true,
     "addr": "127.0.0.1:7777"
   },
+  "notifications": { "desktop": true, "on_input": true, "on_finish": true, "ntfy": "" },
   "budgets": { "daily_usd": 50, "weekly_usd": 250, "monthly_usd": 800, "block_usd": 30 },
   "block_hours": 5,
   "handoff_max_tokens": 20000,
@@ -40,6 +41,9 @@ optimus config set KEY VALUE
 | `remote.claude_remote_control` | `true` | ✓ | start Claude sessions with `--remote-control` |
 | `remote.web_autostart` | `true` | ✓ | start the web dashboard with the first session |
 | `remote.addr` | `127.0.0.1:7777` | ✓ | web dashboard address |
+| `notifications.desktop` | `true` | ✓ | desktop notifications |
+| `notifications.on_input` / `on_finish` | `true` | ✓ | notify when an agent needs input / finishes a turn |
+| `notifications.ntfy` | – | ✓ | ntfy topic URL for phone push |
 | `budgets.daily_usd` · `weekly_usd` · `monthly_usd` · `block_usd` | – | ✓ | spend limits shown as bars |
 | `block_hours` | `5` | ✓ | usage-block length |
 | `handoff_max_tokens` | `20000` | ✓ | handoff document budget |

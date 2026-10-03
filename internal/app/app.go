@@ -64,6 +64,9 @@ type LaunchRequest struct {
 
 func (a *App) opts(name string, rc *bool) providers.LaunchOpts {
 	o := providers.LaunchOpts{Name: name, RemoteControl: a.Cfg.ClaudeRemoteControl()}
+	if self, err := os.Executable(); err == nil {
+		o.Hooks = self
+	}
 	if rc != nil {
 		o.RemoteControl = *rc
 	}

@@ -18,6 +18,8 @@
     <button data-view="usage">Usage</button>
   </nav>
   <div class="meters" id="meters"></div>
+  <button id="next-btn" class="attn" title="Next agent waiting for you (i)" hidden>◆ <span id="next-count"></span> waiting</button>
+  <button id="notif-btn" title="Get a browser notification when an agent needs you" hidden>🔔</button>
   <button class="primary" id="new-btn" title="New session (n)">＋ New session</button>
 </header>
 
@@ -55,6 +57,7 @@
             <button id="act-kill" class="danger">Stop</button>
           </div>
         </div>
+        <div id="pane-ask" class="pane-ask" hidden></div>
         <div id="term" class="term"></div>
         <div class="keys" id="keys"></div>
         <form class="prompt" id="prompt-form" autocomplete="off">

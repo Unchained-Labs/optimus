@@ -18,6 +18,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/config"
 	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/notify"
 	"github.com/Unchained-Labs/optimus/internal/web"
 )
 
@@ -79,6 +80,8 @@ func cmdWeb(a *app.App, args []string) error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	// the dashboard also runs the notifier (one per user, see notify.TryLock)
+	go (&notify.Watcher{Cfg: a.Cfg}).Run(ctx, 2*time.Second)
 	go func() {
 		<-ctx.Done()
 		sctx, c := context.WithTimeout(context.Background(), 2*time.Second)

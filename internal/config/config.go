@@ -45,8 +45,17 @@ type Remote struct {
 	Addr string `json:"addr,omitempty"`
 }
 
+// Notifications decides when and how optimus tells you an agent needs you.
+type Notifications struct {
+	Desktop  *bool  `json:"desktop,omitempty"`   // notify-send / macOS notification (default on)
+	OnInput  *bool  `json:"on_input,omitempty"`  // agent waits for an answer (default on)
+	OnFinish *bool  `json:"on_finish,omitempty"` // agent finished its turn (default on)
+	Ntfy     string `json:"ntfy,omitempty"`      // ntfy topic URL for phone push, e.g. https://ntfy.sh/my-secret-topic
+}
+
 type Config struct {
 	DefaultAgent    string           `json:"default_agent,omitempty"`
+	Notifications   Notifications    `json:"notifications"`
 	Remote          Remote           `json:"remote"`
 	Budgets         Budgets          `json:"budgets"`
 	BlockHours      int              `json:"block_hours,omitempty"`
@@ -84,6 +93,12 @@ func (c Config) Agent() string {
 }
 
 func Bool(b bool) *bool { return &b }
+
+func on(b *bool) bool { return b == nil || *b }
+
+func (n Notifications) DesktopOn() bool { return on(n.Desktop) }
+func (n Notifications) InputOn() bool   { return on(n.OnInput) }
+func (n Notifications) FinishOn() bool  { return on(n.OnFinish) }
 
 func home() string {
 	h, _ := os.UserHomeDir()

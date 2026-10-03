@@ -194,3 +194,9 @@ table.sessions { width: 100%; border-collapse: collapse; }
   .grid2 { grid-template-columns: 1fr; }
   .sessions .hide-sm { display: none; }
 }
+
+/* attention */
+button.attn { background: var(--red); color: var(--bg3); font-weight: 700; animation: pulse 1.6s infinite; }
+.win .ask { font-size: 12px; color: var(--red); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.pane-ask { padding: 6px 12px; background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--text); font-size: 13px; border-bottom: 1px solid var(--surface); }
+.pane-ask b { color: var(--red); }

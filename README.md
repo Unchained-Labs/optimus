@@ -22,7 +22,7 @@ See what they cost, how much quota is left, and hand context from one session to
 
 ## What it does
 
-- **One fleet:** start any agent in any project. Each runs in optimus's own tmux server, keeps going after you close the UI, and shows whether it's busy, waiting for input or idle.
+- **One fleet:** start any agent in any project. Each runs in optimus's own tmux server, keeps going after you close the UI, and tells you, with a notification, when one needs you.
 - **Terminal, browser, phone:** a keyboard-driven dashboard, plus a web dashboard with live interactive terminals that works on a phone. Remote control is on by default.
 - **Every session, every agent:** a searchable history with transcripts, tokens and cost. Resume any session.
 - **Context that travels:** hand a session's goal, changed files and recent conversation to a new agent (Claude → Codex works) or to one that's already running.

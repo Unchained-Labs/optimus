@@ -15,6 +15,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/mux"
 )
@@ -189,4 +190,35 @@ func TestStaticAndPage(t *testing.T) {
 			t.Errorf("%s: %v %d", p, err, resp.StatusCode)
 		}
 	}
+}
+
+// TestHookRecordsPane runs `optimus hook claude` inside a real tmux pane and
+// checks the state lands on that pane's window.
+func TestHookRecordsPane(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	_, _ = setup(t)
+	bin := t.TempDir() + "/optimus"
+	if out, err := exec.Command("go", "build", "-o", bin, "../../cmd/optimus").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, out)
+	}
+	payload := `{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"rm -rf build"}}`
+	script := "echo '" + payload + "' | " + bin + " hook claude; sleep 30"
+	id, err := mux.Spawn("hook-test", "claude", t.TempDir(), "", []string{"sh", "-c", script})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		w, err := mux.Resolve(id)
+		if err == nil {
+			info := agentstate.Resolve(w, "")
+			if info.State == mux.StateWaiting && info.Message == "wants to use Bash: rm -rf build" {
+				return
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatal("hook state never reached the window")
 }

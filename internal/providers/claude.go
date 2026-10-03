@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/config"
 	"github.com/Unchained-Labs/optimus/internal/model"
 )
@@ -349,6 +350,9 @@ func toolCall(name string, input json.RawMessage) model.ToolCall {
 // optional-value flag like --remote-control never swallows the prompt.
 func claudeOpts(o LaunchOpts) []string {
 	var a []string
+	if o.Hooks != "" {
+		a = append(a, "--settings", agentstate.ClaudeSettings(o.Hooks))
+	}
 	if o.Name != "" {
 		a = append(a, "--name="+o.Name)
 	}

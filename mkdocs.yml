@@ -97,6 +97,7 @@ nav:
   - Guide:
       - Terminal dashboard: guide/terminal.md
       - Browser & phone: guide/web.md
+      - Attention & notifications: guide/notifications.md
       - Sessions & handoff: guide/sessions.md
       - Costs & quota: guide/usage.md
       - Configuration: guide/configuration.md
