@@ -12,6 +12,7 @@ The web dashboard drives the same agents as the terminal UI:
 - **Keys:** one-tap buttons for Esc, ↵, arrows, Tab, 1/2/3, y/n and ^C, for answering an agent's questions without a keyboard.
 - **Sessions:** search, filter by agent or project, read transcripts, **Resume** and **Handoff**.
 - **Usage:** spend, quota, the current block, budgets, a 30-day chart, and breakdowns by model, agent and project.
+- **Command palette** (++ctrl+k++ or **⌘K**): jump to any agent, session or project, or run any action.
 - **＋ New session** (or ++n++): agent, project, first message, name, and Claude Remote Control. **Quick start** in the sidebar starts your default agent in a recent project with one click.
 
 <div class="op-row" markdown>

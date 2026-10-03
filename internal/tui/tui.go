@@ -71,16 +71,27 @@ type picker struct {
 }
 
 func (p *picker) refilter() {
-	q := strings.ToLower(strings.TrimSpace(p.filter.Value()))
+	words := strings.Fields(strings.ToLower(p.filter.Value()))
 	p.filtered = p.filtered[:0]
 	for _, it := range p.items {
-		if q == "" || strings.Contains(strings.ToLower(it.label+" "+it.detail), q) {
+		if matchWords(strings.ToLower(it.label+" "+it.detail), words) {
 			p.filtered = append(p.filtered, it)
 		}
 	}
 	if p.cur >= len(p.filtered) {
 		p.cur = max(len(p.filtered)-1, 0)
 	}
+}
+
+// matchWords reports whether every word appears in s, in any order:
+// "codex api" finds "new codex session in ~/dev/api".
+func matchWords(s string, words []string) bool {
+	for _, w := range words {
+		if !strings.Contains(s, w) {
+			return false
+		}
+	}
+	return true
 }
 
 type Model struct {
@@ -488,6 +499,8 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "q":
 		return m, tea.Quit
+	case "ctrl+k", ":":
+		return m, m.palette()
 	case "?":
 		m.mode = modeHelp
 		return m, nil
@@ -1357,4 +1370,92 @@ func completePath(v string) string {
 		return shortHome(out)
 	}
 	return out
+}
+
+// palette is one searchable list of everything: agents, sessions, launches
+// and actions.
+func (m *Model) palette() tea.Cmd {
+	var items []pickItem
+	for _, w := range m.windows {
+		st := string(m.states[w.ID])
+		if info := m.infos[w.ID]; info.Message != "" && info.State == mux.StateWaiting {
+			st += ": " + info.Message
+		}
+		items = append(items, pickItem{label: "go to " + w.Name, detail: w.Agent + " · " + st, value: "win:" + w.ID})
+	}
+	actions := [][2]string{
+		{"next agent waiting for me", "act:next"}, {"start my default agent here", "act:quick"},
+		{"start an agent…", "act:new"}, {"fan out a task to several agents", "act:fanout"},
+		{"search inside transcripts", "act:search"}, {"show / hide automated sessions", "act:auto"},
+		{"open the web dashboard", "act:web"}, {"view: agents", "tab:0"}, {"view: sessions", "tab:1"},
+		{"view: projects", "tab:2"}, {"view: usage", "tab:3"}, {"rescan sessions", "act:reload"},
+		{"help: all keys", "act:help"}, {"quit (agents keep running)", "act:quit"},
+	}
+	for _, a := range actions {
+		items = append(items, pickItem{label: a[0], detail: "action", value: a[1]})
+	}
+	agents := []string{}
+	for _, p := range providers.All() {
+		if providers.Installed(m.app.Cfg, p) && p.Name() != "shell" {
+			agents = append(agents, p.Name())
+		}
+	}
+	for i, p := range m.projects() {
+		if i >= 8 {
+			break
+		}
+		if st, err := os.Stat(p.Cwd); err != nil || !st.IsDir() {
+			continue
+		}
+		for _, ag := range agents {
+			items = append(items, pickItem{label: "new " + ag + " in " + p.Name, detail: shortHome(p.Cwd), value: "new:" + ag + "|" + p.Cwd})
+		}
+	}
+	n := 0
+	for _, s := range m.idx.Sessions {
+		if s.Automated || n >= 40 {
+			continue
+		}
+		n++
+		items = append(items, pickItem{label: "session: " + model.Truncate(s.DisplayTitle(), 60), detail: s.Agent + " · " + s.ProjectName() + " · " + ago(s.End), value: "ses:" + s.ID})
+	}
+	m.openPicker("⌘  Command palette — type to search agents, sessions, projects, actions", items, false, func(m *Model, v string) tea.Cmd {
+		kind, arg, _ := strings.Cut(v, ":")
+		switch kind {
+		case "win":
+			for i, w := range m.windows {
+				if w.ID == arg {
+					m.tab, m.wCur = tabAgents, i
+				}
+			}
+			return m.attach(arg)
+		case "tab":
+			m.tab = tab(arg[0] - '0')
+		case "new":
+			ag, dir, _ := strings.Cut(arg, "|")
+			return m.launch(ag, dir)
+		case "ses":
+			if s := m.idx.Find(arg); s != nil {
+				return m.openDetail(s)
+			}
+		case "act":
+			key := map[string]string{"next": "i", "quick": "N", "new": "n", "fanout": "F", "web": "w", "reload": "R", "help": "?", "quit": "q"}[arg]
+			switch arg {
+			case "search":
+				m.tab = tabSessions
+				key = "S"
+			case "auto":
+				m.tab = tabSessions
+				key = "z"
+			case "next", "fanout":
+				m.tab = tabAgents
+			}
+			if key != "" {
+				_, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+				return cmd
+			}
+		}
+		return nil
+	})
+	return textinput.Blink
 }
