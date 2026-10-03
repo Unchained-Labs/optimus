@@ -221,3 +221,13 @@ pre.diff .a { color: var(--green); } pre.diff .d { color: var(--red); } pre.diff
 .sessions .snip { color: var(--text); opacity: .85; }
 .sessions .snip mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 .sessions .auto { color: var(--dim); }
+
+/* command palette */
+.dlg.palette { width: min(640px, calc(100vw - 24px)); padding: 10px; margin-top: 12vh; }
+.dlg.palette #pal-q { font-size: 16px; padding: 10px 12px; }
+.pal-list { max-height: 50vh; overflow-y: auto; margin-top: 8px; }
+.pal-item { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.pal-item.on { background: var(--surface); }
+.pal-item .k { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.pal-item .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pal-hint { font-size: 12px; margin: 8px 4px 0; }

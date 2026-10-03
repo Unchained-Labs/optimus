@@ -36,6 +36,10 @@ Claude Code and Codex sessions started by optimus report their state themselves 
 
 Press ++i++ (or ++alt+n++ while attached) to jump to the next agent waiting for you.
 
+## Command palette
+
+++ctrl+k++ (or ++colon++) opens one searchable list of everything: running agents (*go to …*), recent sessions, *new &lt;agent&gt; in &lt;project&gt;* for your recent projects, and every action. Type a few words in any order (`codex api`, `rate lim`) and press ++enter++. The browser has the same palette on ++ctrl+k++ (++cmd+k++ on macOS), even while a terminal has focus.
+
 ## Keys
 
 | Key | Agents | Sessions | Projects |

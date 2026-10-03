@@ -240,6 +240,8 @@ function ensureTerm() {
   term.fit = new FitAddon.FitAddon();
   term.xterm.loadAddon(term.fit);
   term.xterm.open($("#term"));
+  // Ctrl/Cmd+K opens the palette instead of reaching the agent
+  term.xterm.attachCustomKeyEventHandler((e) => !((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k"));
   term.xterm.onData((d) => term.ws?.readyState === 1 && term.ws.send(new TextEncoder().encode(d)));
   new ResizeObserver(() => fit()).observe($("#term"));
 }
@@ -593,6 +595,61 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "2") setView("sessions");
   else if (e.key === "3") setView("usage");
   else if (e.key === "/" && S.view === "sessions") { e.preventDefault(); $("#s-q").focus(); }
+});
+
+// ---------------------------------------------------------------- command palette
+
+const PAL = { items: [], shown: [], cur: 0, sessions: [] };
+
+async function openPalette() {
+  const st = S.state;
+  if (!st) return;
+  const items = [];
+  for (const w of st.windows) items.push({ k: "agent", l: `go to ${w.name}`, d: `${w.agent} · ${w.state}${w.message ? ": " + w.message : ""}`, run: () => { select(w.id); setView("fleet"); } });
+  const acts = [
+    ["new session…", () => openNew()], ["next agent waiting for me", nextWaiting], ["open on my phone", () => $("#phone-btn").click()],
+    ["view: fleet", () => setView("fleet")], ["view: sessions", () => setView("sessions")], ["view: usage", () => setView("usage")],
+    ["search inside transcripts", () => { setView("sessions"); $("#s-content").checked = true; $("#s-q").focus(); }],
+  ];
+  for (const [l, run] of acts) items.push({ k: "action", l, d: "", run });
+  for (const p of st.projects.filter((p) => p.exists).slice(0, 8))
+    for (const a of st.agents.filter((a) => a.installed && a.name !== "shell"))
+      items.push({ k: "start", l: `new ${a.name} in ${p.name}`, d: short(p.cwd), run: () => openNew({ agent: a.name, dir: p.cwd }) });
+  try {
+    if (!PAL.sessions.length) PAL.sessions = (await api("/api/sessions?limit=60")).sessions;
+  } catch {}
+  for (const s of PAL.sessions) items.push({ k: "session", l: s.title, d: `${s.agent} · ${s.project} · ${ago(s.end)}`, run: () => openTranscript(s.id) });
+  PAL.items = items;
+  $("#pal-q").value = "";
+  renderPalette();
+  $("#dlg-palette").showModal();
+  $("#pal-q").focus();
+}
+
+function renderPalette() {
+  const words = $("#pal-q").value.toLowerCase().split(/\s+/).filter(Boolean);
+  PAL.shown = PAL.items.filter((it) => words.every((w) => `${it.l} ${it.d} ${it.k}`.toLowerCase().includes(w))).slice(0, 60);
+  PAL.cur = Math.min(PAL.cur, Math.max(PAL.shown.length - 1, 0));
+  $("#pal-list").innerHTML = PAL.shown.map((it, i) => `<div class="pal-item ${i === PAL.cur ? "on" : ""}" data-i="${i}"><span class="l">${esc(it.l)} <span class="dim">${esc(it.d)}</span></span><span class="k">${esc(it.k)}</span></div>`).join("") || `<p class="dim">No match.</p>`;
+  $$("#pal-list .pal-item").forEach((el) => el.addEventListener("click", () => runPalette(+el.dataset.i)));
+  $("#pal-list .on")?.scrollIntoView({ block: "nearest" });
+}
+
+function runPalette(i) {
+  const it = PAL.shown[i];
+  $("#dlg-palette").close();
+  it?.run();
+}
+
+$("#pal-q").addEventListener("input", () => { PAL.cur = 0; renderPalette(); });
+$("#pal-q").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown") { e.preventDefault(); PAL.cur = Math.min(PAL.cur + 1, PAL.shown.length - 1); renderPalette(); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); PAL.cur = Math.max(PAL.cur - 1, 0); renderPalette(); }
+  else if (e.key === "Enter") { e.preventDefault(); runPalette(PAL.cur); }
+});
+$("#pal-btn").addEventListener("click", openPalette);
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); }
 });
 
 // ---------------------------------------------------------------- phone & app

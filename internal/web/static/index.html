@@ -27,6 +27,7 @@
   <button id="next-btn" class="attn" title="Next agent waiting for you (i)" hidden>◆ <span id="next-count"></span> waiting</button>
   <button id="notif-btn" title="Get a browser notification when an agent needs you" hidden>🔔</button>
   <button id="phone-btn" title="Open this dashboard on your phone">📱</button>
+  <button id="pal-btn" title="Command palette (Ctrl+K)">⌘K</button>
   <button class="primary" id="new-btn" title="New session (n)">＋ New session</button>
 </header>
 
@@ -173,6 +174,12 @@
     <div class="tr-actions"><button id="diff-merge">Merge</button><button id="diff-close">Close</button></div>
   </div>
   <pre class="tr-body diff" id="diff-body"></pre>
+</dialog>
+
+<dialog id="dlg-palette" class="dlg palette">
+  <input id="pal-q" placeholder="Search agents, sessions, projects, actions…" autocomplete="off">
+  <div id="pal-list" class="pal-list"></div>
+  <div class="dim pal-hint">↑↓ move · ↵ open · esc close</div>
 </dialog>
 
 <dialog id="dlg-phone" class="dlg">
