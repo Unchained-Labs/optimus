@@ -63,7 +63,8 @@ jobs:
           OPTIMUS_DOWNLOAD_BASE="file://$rel" sh -s -- --yes --no-setup --bin-dir "$HOME/bin" < install.sh
           "$HOME/bin/optimus" version
           # a tampered checksum must abort the install
-          sed -i.bak 's/^./0/' "$rel/checksums.txt"
+          # (all-zero digest: can never match, unlike editing one character)
+          printf '%064d  optimus_%s_%s.tar.gz\n' 0 "$os" "$arch" > "$rel/checksums.txt"
           if OPTIMUS_DOWNLOAD_BASE="file://$rel" sh -s -- --yes --no-setup --bin-dir "$HOME/bin" < install.sh; then echo "tampered archive was installed"; exit 1; fi
 
   docs:
