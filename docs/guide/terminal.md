@@ -42,6 +42,7 @@ Press ++i++ (or ++alt+n++ while attached) to jump to the next agent waiting for 
 |---|---|---|---|
 | ++enter++ | attach | read transcript | sessions of this project |
 | ++i++ | select the next agent waiting for you | ← | ← |
+| ++exclamation++ | answer its question without attaching | | |
 | ++n++ | start an agent: pick which and where | ← | ← |
 | ++shift+n++ | start the default agent here | in the session's folder | in this project |
 | ++s++ | send a prompt | | |
