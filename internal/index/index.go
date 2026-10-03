@@ -17,7 +17,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/providers"
 )
 
-const cacheVersion = 4
+const cacheVersion = 5
 
 type entry struct {
 	Key     string

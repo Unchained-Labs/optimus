@@ -238,6 +238,8 @@ type sessionView struct {
 	Live      bool      `json:"live"`
 	Status    string    `json:"status,omitempty"`
 	Resumable bool      `json:"resumable"`
+	Automated bool      `json:"automated,omitempty"`
+	Snippet   string    `json:"snippet,omitempty"`
 }
 
 func viewSession(s *model.Session) sessionView {
@@ -245,7 +247,7 @@ func viewSession(s *model.Session) sessionView {
 	if p := providers.Get(s.Agent); p != nil {
 		resumable = p.ResumeArgs(s.ID, providers.LaunchOpts{}) != nil
 	}
-	return sessionView{s.Agent, s.ID, s.ShortID(), s.Cwd, s.ProjectName(), s.DisplayTitle(), s.Model, s.Branch, s.Start, s.End, s.Messages, s.Usage.Total(), s.Cost, s.Live, s.Status, resumable}
+	return sessionView{s.Agent, s.ID, s.ShortID(), s.Cwd, s.ProjectName(), s.DisplayTitle(), s.Model, s.Branch, s.Start, s.End, s.Messages, s.Usage.Total(), s.Cost, s.Live, s.Status, resumable, s.Automated, ""}
 }
 
 type agentView struct {
@@ -392,25 +394,46 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 	idx, _ := s.index(q.Get("reload") == "1")
 	text := strings.ToLower(strings.TrimSpace(q.Get("q")))
 	agent, cwd := q.Get("agent"), q.Get("cwd")
+	showAuto, inside := q.Get("automated") == "1", q.Get("content") == "1"
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	if limit <= 0 {
 		limit = 200
 	}
+	// full-text: search transcripts, keep the matching passage per session
+	var snippets map[*model.Session]string
+	if inside && text != "" {
+		snippets = map[*model.Session]string{}
+		for _, h := range index.Search(idx.Sessions, text, 200) {
+			snippets[h.Session] = h.Snippet
+		}
+	}
 	out := []sessionView{}
-	total := 0.0
+	total, hidden := 0.0, 0
 	for _, ss := range idx.Sessions {
 		if (agent != "" && ss.Agent != agent) || (cwd != "" && ss.Cwd != cwd) {
 			continue
 		}
-		if text != "" && !strings.Contains(strings.ToLower(ss.DisplayTitle()+" "+ss.Cwd+" "+ss.Agent+" "+ss.ID+" "+ss.Model), text) {
-			continue
+		if snippets != nil {
+			if snippets[ss] == "" {
+				continue
+			}
+		} else {
+			if ss.Automated && !showAuto {
+				hidden++
+				continue
+			}
+			if text != "" && !strings.Contains(strings.ToLower(ss.DisplayTitle()+" "+ss.Cwd+" "+ss.Agent+" "+ss.ID+" "+ss.Model), text) {
+				continue
+			}
 		}
 		total += ss.Cost
 		if len(out) < limit {
-			out = append(out, viewSession(ss))
+			v := viewSession(ss)
+			v.Snippet = snippets[ss]
+			out = append(out, v)
 		}
 	}
-	writeJSON(w, map[string]any{"sessions": out, "total_cost": total})
+	writeJSON(w, map[string]any{"sessions": out, "total_cost": total, "automated_hidden": hidden})
 }
 
 func (s *Server) session(w http.ResponseWriter, r *http.Request) *model.Session {

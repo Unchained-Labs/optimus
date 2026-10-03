@@ -329,3 +329,35 @@ func TestPWAAndPhone(t *testing.T) {
 		t.Errorf("phone QR: %v", v)
 	}
 }
+
+func TestSessionsAutomatedAndSearch(t *testing.T) {
+	ts, s := setup(t)
+	c := client(t, ts, s)
+	dir := os.Getenv("OPTIMUS_AGENT_HOME") + "/.claude/projects/-w"
+	os.MkdirAll(dir, 0o755)
+	line := func(ep, text string) string {
+		return `{"type":"user","entrypoint":"` + ep + `","timestamp":"2026-09-01T10:00:00Z","cwd":"/w","message":{"role":"user","content":"` + text + `"}}` + "\n"
+	}
+	os.WriteFile(dir+"/bbbb0000-0000-0000-0000-000000000001.jsonl", []byte(line("sdk-cli", "nightly cleanup")), 0o644)
+	os.WriteFile(dir+"/bbbb0000-0000-0000-0000-000000000002.jsonl", []byte(line("cli", "tune the kafka consumer lag alerts")), 0o644)
+	get := func(q string) map[string]any {
+		resp, err := c.Get(ts.URL + "/api/sessions?" + q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v map[string]any
+		json.NewDecoder(resp.Body).Decode(&v)
+		return v
+	}
+	v := get("")
+	if n := len(v["sessions"].([]any)); n != 1 || v["automated_hidden"].(float64) != 1 {
+		t.Errorf("default should hide the automated session: %v", v)
+	}
+	if n := len(get("automated=1")["sessions"].([]any)); n != 2 {
+		t.Errorf("automated=1 should show both: %d", n)
+	}
+	hits := get("content=1&q=consumer+lag")["sessions"].([]any)
+	if len(hits) != 1 || !strings.Contains(hits[0].(map[string]any)["snippet"].(string), "kafka consumer lag") {
+		t.Errorf("content search: %v", hits)
+	}
+}

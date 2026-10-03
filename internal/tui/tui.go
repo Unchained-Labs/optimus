@@ -107,6 +107,10 @@ type Model struct {
 	agentFilter string
 	cwdFilter   string
 	sessions    []*model.Session
+	showAuto    bool   // include automated sessions
+	hiddenAuto  int    // automated sessions hidden by the filter
+	fullText    string // active transcript search
+	snippets    map[*model.Session]string
 
 	// projects tab
 	pCur, pOff int
@@ -154,6 +158,10 @@ type doneMsg struct {
 	reload bool
 }
 type attachedMsg struct{ err error }
+type searchMsg struct {
+	q    string
+	hits []index.Hit
+}
 type diffMsg struct {
 	w    mux.Window
 	diff string
@@ -312,6 +320,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loading = true
 		return m, tea.Batch(m.loadIndex(), m.pollWindows(), tea.ClearScreen)
+
+	case searchMsg:
+		m.busy = ""
+		m.fullText = msg.q
+		m.snippets = map[*model.Session]string{}
+		for _, h := range msg.hits {
+			m.snippets[h.Session] = h.Snippet
+		}
+		m.sCur, m.sOff = 0, 0
+		m.applyFilter()
+		m.flash(fmt.Sprintf("%d sessions mention %q", len(msg.hits), msg.q), len(msg.hits) == 0)
+		return m, nil
 
 	case editedMsg:
 		if msg.err != nil {
@@ -757,7 +777,15 @@ func (m *Model) sessionForWindow(w mux.Window) *model.Session {
 func (m *Model) applyFilter() {
 	q := strings.ToLower(strings.TrimSpace(m.filter.Value()))
 	m.sessions = m.sessions[:0]
+	m.hiddenAuto = 0
 	for _, s := range m.idx.Sessions {
+		if m.fullText != "" && m.snippets[s] == "" {
+			continue
+		}
+		if s.Automated && !m.showAuto && m.fullText == "" {
+			m.hiddenAuto++
+			continue
+		}
 		if m.agentFilter != "" && s.Agent != m.agentFilter {
 			continue
 		}
@@ -790,8 +818,28 @@ func (m *Model) keySessions(key string) (tea.Model, tea.Cmd) {
 		return m, textinput.Blink
 	case "esc":
 		m.filter.SetValue("")
-		m.cwdFilter, m.agentFilter = "", ""
+		m.cwdFilter, m.agentFilter, m.fullText = "", "", ""
 		m.applyFilter()
+	case "z":
+		m.showAuto = !m.showAuto
+		m.applyFilter()
+		if m.showAuto {
+			m.flash("showing automated sessions too", false)
+		} else {
+			m.flash("automated sessions hidden", false)
+		}
+	case "S":
+		m.askInput("Search inside transcripts", m.fullText, func(m *Model, q string) tea.Cmd {
+			if strings.TrimSpace(q) == "" {
+				m.fullText = ""
+				m.applyFilter()
+				return nil
+			}
+			m.busy = "searching transcripts…"
+			sessions := m.idx.Sessions
+			return func() tea.Msg { return searchMsg{q: q, hits: index.Search(sessions, q, 200)} }
+		})
+		return m, textinput.Blink
 	case "a":
 		m.agentFilter = nextAgent(m.agentFilter, m.idx.Sessions)
 		m.applyFilter()

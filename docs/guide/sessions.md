@@ -11,6 +11,27 @@ optimus show last --tail 20     # a transcript
 
 ![Sessions](../images/tui-sessions.png)
 
+### Automated sessions
+
+Sessions started by scripts and schedulers (`claude -p`, Agent SDK runs, `codex exec`, cron jobs) are marked automated and **hidden from session lists by default**. They still count in costs and usage.
+
+| Where | Show them |
+|---|---|
+| shell | `optimus ls --all` |
+| terminal dashboard | ++z++ in Sessions (shown with ⚙) |
+| browser | the **automated** checkbox |
+
+### Search inside transcripts
+
+Find the session where something was discussed, by what was said rather than its title:
+
+```sh
+optimus search "connection pool"     # newest first, with the matching passage
+optimus search kafka -n 5 --json
+```
+
+In the terminal dashboard press ++shift+s++ in Sessions; in the browser tick **inside transcripts** next to the search box. Matching passages replace the titles; ++esc++ clears the search.
+
 optimus reads each agent's own history:
 
 | Agent | Source | Notes |

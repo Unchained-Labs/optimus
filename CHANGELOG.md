@@ -15,6 +15,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Phone: `optimus web --url` prints a QR code of the login link (Tailscale addresses first); a 📱 button shows it in the dashboard.
 - The web dashboard is an installable app (PWA: manifest, icons, service worker) — Add to Home Screen over HTTPS, e.g. with `tailscale serve`.
 - Fleet summary everywhere: `optimus fleet` (`--json`, `--tmux`), appended to the Claude Code status line and shown in the multiplexer's status bar.
+- Automated sessions (`claude -p`, Agent SDK, `codex exec`, cron jobs) are detected and hidden from session lists by default (`ls --all`, `z`, browser checkbox); they still count in costs.
+- Full-text search inside transcripts: `optimus search`, `S` in the Sessions view, "inside transcripts" in the browser, with the matching passage.
 - Jump to the next agent waiting for you: `Alt-n` anywhere in the multiplexer, `i` in the dashboards, `optimus next`.
 
 ### Fixed

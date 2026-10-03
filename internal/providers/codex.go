@@ -80,6 +80,7 @@ type codexItem struct {
 		Branch string `json:"branch"`
 	} `json:"git"`
 	RateLimits json.RawMessage `json:"rate_limits"`
+	Originator string          `json:"originator"`
 }
 
 type codexContent struct {
@@ -169,6 +170,9 @@ func (c Codex) Parse(src Source) (*model.Session, error) {
 			}
 			if it.Git != nil && it.Git.Branch != "" {
 				s.Branch = it.Git.Branch
+			}
+			if strings.Contains(it.Originator, "exec") { // codex exec
+				s.Automated = true
 			}
 		case "turn_context":
 			if it.Model != "" {

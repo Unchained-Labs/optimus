@@ -80,6 +80,7 @@ type claudeLine struct {
 	Summary     string `json:"summary"`
 	LastPrompt  string `json:"lastPrompt"`
 	RequestID   string `json:"requestId"`
+	Entrypoint  string `json:"entrypoint"`
 	Message     *struct {
 		ID      string          `json:"id"`
 		Role    string          `json:"role"`
@@ -203,6 +204,9 @@ func (c Claude) Parse(src Source) (*model.Session, error) {
 		}
 		if s.Cwd == "" && l.Cwd != "" {
 			s.Cwd = l.Cwd
+		}
+		if strings.HasPrefix(l.Entrypoint, "sdk") { // claude -p / Agent SDK
+			s.Automated = true
 		}
 		if l.GitBranch != "" && l.GitBranch != "HEAD" {
 			s.Branch = l.GitBranch
