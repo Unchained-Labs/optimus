@@ -36,11 +36,20 @@ optimus limits
 
 Near the limit, optimus suggests continuing running sessions in another agent. See [Sessions & handoff → When quota runs low](sessions.md#when-quota-runs-low).
 
-As a bonus, the status line becomes a compact summary:
+As a bonus, the status line becomes a compact summary, including the rest of your fleet:
 
 ```text
-◆ Opus 5.5 · api · session $4.50 · 5h ███░░ 62% ↻1h23m · 7d █░░░░ 18%
+◆ Opus 5.5 · api · session $4.50 · 5h ███░░ 62% ↻1h23m · 7d █░░░░ 18% · ⧉ 4 ◆1 · $17.01 today
 ```
+
+## Fleet summary
+
+```sh
+optimus fleet            # ⧉ 4 agents · ◆ 1 waiting · ● 2 busy · $17.01 today
+optimus fleet --json     # for your own status bar, widget or script
+```
+
+The optimus multiplexer shows the same line in its status bar. It's built for frequent refreshes: it reads the states agents and the notifier already recorded instead of capturing screens, and caches today's spend for a minute.
 
 ## Budgets
 

@@ -14,6 +14,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Quota-aware handoff: when an agent's quota window passes `handoff_suggest_pct` (default 85%), optimus suggests continuing its running sessions in another agent (notification, `C` in the TUI, a banner in the browser).
 - Phone: `optimus web --url` prints a QR code of the login link (Tailscale addresses first); a 📱 button shows it in the dashboard.
 - The web dashboard is an installable app (PWA: manifest, icons, service worker) — Add to Home Screen over HTTPS, e.g. with `tailscale serve`.
+- Fleet summary everywhere: `optimus fleet` (`--json`, `--tmux`), appended to the Claude Code status line and shown in the multiplexer's status bar.
 - Jump to the next agent waiting for you: `Alt-n` anywhere in the multiplexer, `i` in the dashboards, `optimus next`.
 
 ### Fixed

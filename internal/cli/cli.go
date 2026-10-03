@@ -43,6 +43,7 @@ Usage:
   optimus compare                 agents in worktrees side by side: state, changes, branch
   optimus wt diff|merge|rm W      review, merge (--commit) or discard (--force) an agent's worktree
   optimus ps                      list running agents (optimus windows + other live sessions)
+  optimus fleet                   one-line summary: agents, waiting, busy, today's spend (--json, --tmux)
   optimus attach [window]         attach to a window (Alt-q to come back)
   optimus peek <window> [-n 40]   print the bottom of a window's screen
   optimus send <window|all> TEXT  type a prompt into one or all agents  (--no-enter)
@@ -133,6 +134,8 @@ func Run(args []string) int {
 		err = cmdCompare(rest)
 	case "watch":
 		err = cmdWatch(a)
+	case "fleet":
+		err = cmdFleet(a, rest)
 	case "web", "serve", "ui-web":
 		err = cmdWeb(a, rest)
 	case "agents", "doctor":
@@ -813,6 +816,13 @@ func cmdStatusline(a *app.App) error {
 			s += " ↻" + format.Dur(w.ResetsAt.Sub(now))
 		}
 		parts = append(parts, s)
+	}
+	if f := fleetSummary(a); f.Agents > 0 {
+		fleet := fmt.Sprintf("⧉ %d", f.Agents)
+		if f.Waiting > 0 {
+			fleet += fmt.Sprintf(" \x1b[1;31m◆%d\x1b[0m", f.Waiting)
+		}
+		parts = append(parts, fleet+" · "+format.Money(f.Today)+" today")
 	}
 	fmt.Print(strings.Join(parts, " · "))
 	return nil

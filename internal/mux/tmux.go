@@ -51,6 +51,8 @@ type Window struct {
 	Repo     string
 	Base     string
 	Branch   string
+	// State is the last state the notifier recorded (@optimus_state)
+	State string
 }
 
 func Available() bool {
@@ -113,8 +115,9 @@ set -g display-time 4000
 set -g status-style "bg=#1e1e2e,fg=#cdd6f4"
 set -g status-left "#[bg=#f38ba8,fg=#1e1e2e,bold] OPTIMUS #[default] "
 set -g status-left-length 20
-set -g status-right "#[fg=#a6adc8]#{@optimus_agent} · #{b:pane_current_path}  #[fg=#f9e2af]Alt-n#[fg=#a6adc8] next ◆  #[fg=#f9e2af]Alt-q#[fg=#a6adc8] back "
-set -g status-right-length 90
+set -g status-interval 15
+set -g status-right "#[fg=#a6adc8]#(` + shellQuote(self) + ` fleet --tmux)  #[fg=#f9e2af]Alt-n#[fg=#a6adc8] next ◆  #[fg=#f9e2af]Alt-q#[fg=#a6adc8] back "
+set -g status-right-length 110
 set -g window-status-format " #I #W#{?#{==:#{@optimus_state},input}, #[fg=#f38ba8]◆,} "
 set -g window-status-current-format "#[bg=#89b4fa,fg=#1e1e2e,bold] #I #W "
 set -g message-style "bg=#f9e2af,fg=#1e1e2e,bold"
@@ -220,7 +223,7 @@ func List() ([]Window, error) {
 	if !Available() || !Running() {
 		return nil, nil
 	}
-	f := strings.Join([]string{"#{window_id}", "#{window_index}", "#{window_name}", "#{@optimus_agent}", "#{@optimus_cwd}", "#{@optimus_session}", "#{pane_current_command}", "#{pane_pid}", "#{pane_dead}", "#{window_activity}", "#{@optimus_created}", "#{pane_current_path}", "#{pane_id}", "#{@optimus_worktree}", "#{@optimus_repo}", "#{@optimus_base}", "#{@optimus_branch}"}, fieldSep)
+	f := strings.Join([]string{"#{window_id}", "#{window_index}", "#{window_name}", "#{@optimus_agent}", "#{@optimus_cwd}", "#{@optimus_session}", "#{pane_current_command}", "#{pane_pid}", "#{pane_dead}", "#{window_activity}", "#{@optimus_created}", "#{pane_current_path}", "#{pane_id}", "#{@optimus_worktree}", "#{@optimus_repo}", "#{@optimus_base}", "#{@optimus_branch}", "#{@optimus_state}"}, fieldSep)
 	out, err := run("list-windows", "-t", "="+Session, "-F", f)
 	if err != nil {
 		return nil, err
@@ -228,7 +231,7 @@ func List() ([]Window, error) {
 	var ws []Window
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		p := strings.Split(line, fieldSep)
-		if len(p) < 17 {
+		if len(p) < 18 {
 			continue
 		}
 		w := Window{ID: p[0], Name: p[2], Agent: p[3], Cwd: p[4], SessionID: p[5], Command: p[6], Dead: p[8] == "1"}
@@ -244,7 +247,7 @@ func List() ([]Window, error) {
 			w.Cwd = p[11]
 		}
 		w.Pane = p[12]
-		w.Worktree, w.Repo, w.Base, w.Branch = p[13], p[14], p[15], p[16]
+		w.Worktree, w.Repo, w.Base, w.Branch, w.State = p[13], p[14], p[15], p[16], p[17]
 		if w.Agent == "" {
 			w.Agent = w.Command
 		}
