@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-03
+
+Run a fleet without babysitting it: agents tell you when they need you, you answer without attaching, parallel agents get their own worktrees, and context moves before quota runs out.
+
 ### Added
 - Reliable agent states from the agents themselves: Claude Code sessions get lifecycle hooks via `--settings`, Codex gets a `notify` program; *needs input* now shows the actual question ("wants to use Write: hello.txt").
 - Notifications when an agent needs input or finishes: desktop, multiplexer status line, browser, and optional phone push via ntfy (`optimus watch`, `notifications.*` config).
@@ -45,5 +49,6 @@ First public release.
 ### Fixed
 - Agents not listed (and the web terminal returning 404) on tmux 3.3+, which escapes control characters in format output.
 
-[Unreleased]: https://github.com/Unchained-Labs/optimus/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Unchained-Labs/optimus/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Unchained-Labs/optimus/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Unchained-Labs/optimus/releases/tag/v0.1.0
