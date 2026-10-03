@@ -4,10 +4,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-### Fixed
-- Agents not listed (and the web terminal returning 404) on tmux 3.3+, which escapes control characters in format output.
-
-## [0.1.0]
+## [0.1.0] - 2026-10-03
 
 First public release.
 
@@ -21,6 +18,10 @@ First public release.
 - Remote control by default: launching a session brings up the web dashboard; Claude sessions start with `--remote-control`.
 - One-step launch: `optimus claude|codex|… [dir]`, `optimus new` with a default agent, `N` in the TUI, New session dialog on the web.
 - One-line installer with a setup wizard, release builds for Linux and macOS (amd64/arm64), CI on Linux and macOS.
+- Documentation site on GitHub Pages.
+
+### Fixed
+- Agents not listed (and the web terminal returning 404) on tmux 3.3+, which escapes control characters in format output.
 
 [Unreleased]: https://github.com/Unchained-Labs/optimus/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/Unchained-Labs/optimus/releases/tag/v0.1.0
