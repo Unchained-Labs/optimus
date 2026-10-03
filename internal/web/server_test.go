@@ -304,3 +304,28 @@ func TestHandoffPreviewAndEdit(t *testing.T) {
 		t.Fatalf("edited document not used: %q", b)
 	}
 }
+
+func TestPWAAndPhone(t *testing.T) {
+	ts, s := setup(t)
+	for path, ctype := range map[string]string{"/sw.js": "text/javascript", "/manifest.webmanifest": "application/manifest+json", "/static/icon-192.png": "image/png"} {
+		resp, err := http.Get(ts.URL + path)
+		if err != nil || resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), ctype) {
+			t.Errorf("%s: %v %d %s", path, err, resp.StatusCode, resp.Header.Get("Content-Type"))
+		}
+	}
+	c := client(t, ts, s)
+	var v map[string]any
+	resp, _ := c.Get(ts.URL + "/api/phone")
+	json.NewDecoder(resp.Body).Decode(&v)
+	if urls, _ := v["urls"].([]any); len(urls) != 0 || v["svg"] != nil {
+		t.Errorf("no phone URLs expected without PhoneURLs: %v", v)
+	}
+	s.Addr = "100.64.0.1:7777"
+	s.PhoneURLs = func(addr string) []string { return []string{"http://" + addr + "/?token=x"} }
+	resp, _ = c.Get(ts.URL + "/api/phone")
+	v = nil
+	json.NewDecoder(resp.Body).Decode(&v)
+	if svg, _ := v["svg"].(string); !strings.HasPrefix(svg, "<svg") {
+		t.Errorf("phone QR: %v", v)
+	}
+}

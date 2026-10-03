@@ -31,9 +31,32 @@ The layout adapts to small screens: agents become a swipeable row, the terminal 
 To reach it from your phone, put both devices on a private network and listen on that interface:
 
 ```sh
-optimus web --addr 100.101.102.103:7777   # your machine's Tailscale IP
-optimus web --url                          # open this link on the phone once
+optimus web --bg --addr 100.101.102.103:7777   # your machine's Tailscale IP
+optimus web --url --addr 100.101.102.103:7777   # prints a QR code: scan it with the phone's camera
 ```
+
+`optimus web --url` prints a QR code of the login link (Tailscale addresses first). The **📱** button in the dashboard shows the same QR, which is handy when it's already open on your laptop.
+
+### Install it as an app
+
+The dashboard is a Progressive Web App: **Add to Home Screen** (iOS Safari) or **Install app** (Android Chrome) gives it an icon and a full-screen window. Installing, and system notifications on the phone, need HTTPS. The simplest way is Tailscale's built-in HTTPS proxy:
+
+```sh
+optimus web --bg                     # 127.0.0.1:7777
+tailscale serve --bg 7777            # https://<machine>.<tailnet>.ts.net
+```
+
+Then open `https://<machine>.<tailnet>.ts.net/?token=…` (the token from `optimus web --url`) on the phone.
+
+### Push notifications
+
+For notifications on the phone even when the app is closed, use [ntfy](https://ntfy.sh): install the ntfy app, subscribe to a long random topic, then
+
+```sh
+optimus config set notifications.ntfy https://ntfy.sh/<your-long-random-topic>
+```
+
+See [Attention & notifications](notifications.md).
 
 !!! danger "Don't expose it to the internet"
     Anyone with the access token can type into your agents. Use Tailscale, WireGuard or an SSH tunnel. `--addr 0.0.0.0:7777` works on a trusted LAN and prints a warning. There is no built-in TLS.

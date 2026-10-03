@@ -26,6 +26,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
 	"github.com/Unchained-Labs/optimus/internal/providers"
+	"github.com/Unchained-Labs/optimus/internal/qrcode"
 	"github.com/Unchained-Labs/optimus/internal/ratelimits"
 	"github.com/Unchained-Labs/optimus/internal/usage"
 	"github.com/Unchained-Labs/optimus/internal/worktree"
@@ -39,6 +40,10 @@ const cookieName = "optimus_token"
 type Server struct {
 	app   *app.App
 	token string
+	// Addr is the listen address, used to tell phones where to connect.
+	Addr string
+	// PhoneURLs lists URLs reachable from other devices (set by the CLI).
+	PhoneURLs func(addr string) []string
 
 	mu       sync.Mutex
 	idx      *index.Index
@@ -73,6 +78,18 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	m.HandleFunc("GET /{$}", s.page)
 	m.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
+	// the service worker must be served from the root to control the app
+	m.HandleFunc("GET /sw.js", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := staticFS.ReadFile("static/sw.js")
+		w.Header().Set("Content-Type", "text/javascript")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Write(b)
+	})
+	m.HandleFunc("GET /manifest.webmanifest", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := staticFS.ReadFile("static/manifest.webmanifest")
+		w.Header().Set("Content-Type", "application/manifest+json")
+		w.Write(b)
+	})
 
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/state", s.state)
@@ -91,6 +108,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/windows/{id}/discard", s.discard)
 	api.HandleFunc("POST /api/fanout", s.fanout)
 	api.HandleFunc("GET /api/usage", s.usage)
+	api.HandleFunc("GET /api/phone", s.phone)
 	api.HandleFunc("GET /api/term/{id}", s.term)
 	m.Handle("/api/", s.auth(api))
 	return securityHeaders(m)
@@ -695,6 +713,21 @@ func (s *Server) fanout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"windows": ids})
+}
+
+// phone tells the dashboard how a phone can connect, with a QR code.
+func (s *Server) phone(w http.ResponseWriter, r *http.Request) {
+	var urls []string
+	if s.PhoneURLs != nil {
+		urls = s.PhoneURLs(s.Addr)
+	}
+	resp := map[string]any{"urls": urls, "addr": s.Addr}
+	if len(urls) > 0 {
+		if svg, err := qrcode.SVG(urls[0]); err == nil {
+			resp["svg"] = svg
+		}
+	}
+	writeJSON(w, resp)
 }
 
 type usageRow struct {
