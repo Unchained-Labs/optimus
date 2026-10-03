@@ -216,3 +216,8 @@ pre.diff .a { color: var(--green); } pre.diff .d { color: var(--red); } pre.diff
 .qr { background: #fff; padding: 12px; border-radius: 12px; width: min(280px, 70vw); margin: 8px auto; }
 .qr svg { display: block; width: 100%; height: auto; }
 .phone-url { font: 12px var(--mono); word-break: break-all; color: var(--dim); text-align: center; }
+
+.toggle.inline { margin: 0; white-space: nowrap; font-size: 13px; color: var(--dim); }
+.sessions .snip { color: var(--text); opacity: .85; }
+.sessions .snip mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.sessions .auto { color: var(--dim); }

@@ -423,7 +423,7 @@ $("#new-form").addEventListener("submit", async (e) => {
 // ---------------------------------------------------------------- sessions
 
 let sTimer;
-["#s-q", "#s-agent", "#s-project"].forEach((s) => $(s).addEventListener("input", () => { clearTimeout(sTimer); sTimer = setTimeout(loadSessions, 180); }));
+["#s-q", "#s-agent", "#s-project", "#s-content", "#s-auto"].forEach((s) => $(s).addEventListener("input", () => { clearTimeout(sTimer); sTimer = setTimeout(loadSessions, 180); }));
 
 async function loadSessions() {
   const st = S.state;
@@ -433,18 +433,22 @@ async function loadSessions() {
     $("#s-agent").innerHTML = `<option value="">All agents</option>` + agents.map((a) => `<option ${a === curA ? "selected" : ""}>${esc(a)}</option>`).join("");
     $("#s-project").innerHTML = `<option value="">All projects</option>` + st.projects.map((p) => `<option value="${esc(p.cwd)}" ${p.cwd === curP ? "selected" : ""}>${esc(p.name)} — ${esc(short(p.cwd))}</option>`).join("");
   }
-  const q = new URLSearchParams({ q: $("#s-q").value, agent: $("#s-agent").value, cwd: $("#s-project").value });
+  const inside = $("#s-content").checked;
+  const q = new URLSearchParams({ q: $("#s-q").value, agent: $("#s-agent").value, cwd: $("#s-project").value, content: inside ? "1" : "", automated: $("#s-auto").checked ? "1" : "" });
+  if (inside && $("#s-q").value.trim().length < 3) { $("#s-sum").textContent = "type at least 3 characters to search inside transcripts"; $("#s-body").innerHTML = ""; return; }
   let r;
   try { r = await api("/api/sessions?" + q); } catch (e) { return; }
   S.sessions = r.sessions;
-  $("#s-sum").textContent = `${r.sessions.length} sessions · ${money(r.total_cost)}`;
+  $("#s-sum").textContent = `${r.sessions.length} sessions · ${money(r.total_cost)}` + (r.automated_hidden ? ` · ${r.automated_hidden} automated hidden` : "");
+  const term = $("#s-q").value.trim();
+  const mark = (t) => esc(t).replace(new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (m) => `<mark>${m}</mark>`);
   $("#s-body").innerHTML = r.sessions.map((s, i) => `
     <tr data-i="${i}">
       <td>${s.live ? '<span class="live-dot" title="running">●</span>' : ""}</td>
       <td>${agentChip(s.agent)}</td>
       <td class="dim">${ago(s.end)}</td>
       <td class="hide-sm">${esc(s.project)}</td>
-      <td class="title">${esc(s.title)}</td>
+      <td class="title">${s.snippet ? `<span class="snip">“${mark(s.snippet)}”</span><br><span class="dim">${esc(s.title)}</span>` : (s.automated ? `<span class="auto">⚙ </span>` : "") + esc(s.title)}</td>
       <td class="num hide-sm">${s.turns}</td>
       <td class="num hide-sm">${tokens(s.tokens)}</td>
       <td class="money r">${money(s.cost)}</td>

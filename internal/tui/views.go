@@ -157,7 +157,7 @@ func (m *Model) viewFooter() string {
 	case tabAgents:
 		keys = [][2]string{{"enter", "attach"}, {"i", "next ◆"}, {"!", "answer"}, {"F", "fan out"}, {"D/M/X", "diff/merge/discard"}, {"n", "new"}, {"s", "send"}, {"b", "broadcast"}, {"space", "mark"}, {"h", "handoff"}, {"o", "transcript"}, {"r", "rename"}, {"x", "kill"}}
 	case tabSessions:
-		keys = [][2]string{{"enter", "view"}, {"r", "resume"}, {"h", "handoff"}, {"H", "summarized handoff"}, {"y", "copy ctx"}, {"/", "filter"}, {"a", "agent"}, {"p", "project"}}
+		keys = [][2]string{{"enter", "view"}, {"S", "search inside"}, {"z", "automated"}, {"r", "resume"}, {"h", "handoff"}, {"H", "summarized handoff"}, {"y", "copy ctx"}, {"/", "filter"}, {"a", "agent"}, {"p", "project"}}
 	case tabProjects:
 		keys = [][2]string{{"enter", "sessions"}, {"c", "new agent here"}}
 	case tabUsage:
@@ -309,11 +309,17 @@ func (m *Model) viewSessions() string {
 	if m.cwdFilter != "" {
 		chips = append(chips, "project:"+shortHome(m.cwdFilter))
 	}
+	if m.fullText != "" {
+		chips = append(chips, "mentions:\""+m.fullText+"\"")
+	}
 	total := 0.0
 	for _, s := range m.sessions {
 		total += s.Cost
 	}
 	info := sDim.Render(fmt.Sprintf("%d sessions · %s", len(m.sessions), format.Money(total)))
+	if m.hiddenAuto > 0 {
+		info += sDim.Render(fmt.Sprintf(" · %d automated hidden (", m.hiddenAuto)) + sKey.Render("z") + sDim.Render(")")
+	}
 	if len(chips) > 0 {
 		info += "  " + sKey.Render(strings.Join(chips, "  ")) + sDim.Render("  (esc clears)")
 	}
@@ -361,7 +367,7 @@ func (m *Model) viewSessions() string {
 			rcell(fmt.Sprint(s.Messages), 6),
 			sDim.Render(rcell(format.Tokens(s.Usage.Total()), 8)),
 			sMoney.Render(rcell(format.Money(s.Cost), 9)),
-			cell(s.DisplayTitle(), cols[7].w),
+			cell(m.sessionTitle(s), cols[7].w),
 		}
 		line := strings.Join(vals, " ")
 		if i == m.sCur {
@@ -377,6 +383,18 @@ func (m *Model) viewSessions() string {
 		}
 	}
 	return strings.Join(append(head, rows...), "\n")
+}
+
+// sessionTitle shows the matching passage during a transcript search.
+func (m *Model) sessionTitle(s *model.Session) string {
+	if sn := m.snippets[s]; m.fullText != "" && sn != "" {
+		return sDim.Render("“") + sn + sDim.Render("”")
+	}
+	t := s.DisplayTitle()
+	if s.Automated {
+		t = sDim.Render("⚙ ") + t
+	}
+	return t
 }
 
 // --- projects -------------------------------------------------------------------------
@@ -559,7 +577,7 @@ func (m *Model) viewHelp() string {
 	}{
 		{"Everywhere", [][2]string{{"1-4 / tab", "switch view"}, {"j k ↑ ↓", "move"}, {"n", "start an agent (pick which and where)"}, {"N", "start your default agent in this project, now"}, {"w", "open the web dashboard (phone/browser remote)"}, {"R", "rescan sessions"}, {"q", "quit (agents keep running)"}}},
 		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"!", "answer it without attaching: shows its question, forwards 1/2/3, y/n, enter"}, {"F", "fan out: same task to several agents, each in its own worktree"}, {"C", "quota running out: continue the session in another agent"}, {"D / M / X", "worktree agents: review diff / merge into the repo / discard"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
-		{"Sessions", [][2]string{{"enter", "read transcript"}, {"r", "resume in the multiplexer"}, {"h", "hand off context to a new agent, a running one, clipboard or file"}, {"H", "same, condensed by an agent first"}, {"y", "copy handoff to clipboard"}, {"/ a p esc", "filter text / agent / project / clear"}}},
+		{"Sessions", [][2]string{{"enter", "read transcript"}, {"r", "resume in the multiplexer"}, {"h", "hand off context to a new agent, a running one, clipboard or file"}, {"H", "same, condensed by an agent first"}, {"y", "copy handoff to clipboard"}, {"/ a p esc", "filter text / agent / project / clear"}, {"S", "search inside transcripts"}, {"z", "show / hide automated sessions (claude -p, cron jobs)"}}},
 		{"Projects", [][2]string{{"enter", "sessions of this project"}, {"c", "start an agent here"}}},
 	}
 	var b strings.Builder

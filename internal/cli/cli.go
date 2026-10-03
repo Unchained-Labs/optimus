@@ -58,8 +58,9 @@ Usage:
                                   --addr 0.0.0.0:7777 for phone/LAN)
 
  Sessions & context
-  optimus ls                      list sessions  (-a agent -p project -n 30 --live --json)
+  optimus ls                      list sessions  (-a agent -p project -n 30 --live --all --json)
   optimus show <session>          print a transcript  (--tail N)
+  optimus search TEXT             find sessions whose transcripts mention TEXT  (-n 20 --json)
   optimus handoff <session>       build a context document from a session and
         --to AGENT                  …start AGENT primed with it
         --into WINDOW               …send it into a running window
@@ -94,6 +95,8 @@ func Run(args []string) int {
 		err = cmdLs(a, rest)
 	case "show", "cat":
 		err = cmdShow(a, rest)
+	case "search", "grep":
+		err = cmdSearch(a, rest)
 	case "usage", "cost", "costs":
 		err = cmdUsage(a, rest)
 	case "blocks":
@@ -260,6 +263,7 @@ func cmdLs(a *app.App, args []string) error {
 	proj := fs.String("p", "", "project substring")
 	n := fs.Int("n", 30, "limit (0 = all)")
 	live := fs.Bool("live", false, "only running sessions")
+	all := fs.Bool("all", false, "include automated sessions (claude -p, codex exec, cron jobs)")
 	asJSON := fs.Bool("json", false, "json output")
 	pos := parse(fs, args)
 	if len(pos) > 0 && *proj == "" {
@@ -267,8 +271,13 @@ func cmdLs(a *app.App, args []string) error {
 	}
 	idx := a.Index()
 	var out []*model.Session
+	hidden := 0
 	for _, s := range idx.Sessions {
 		if (*agent != "" && s.Agent != *agent) || (*proj != "" && !strings.Contains(strings.ToLower(s.Cwd), strings.ToLower(*proj))) || (*live && !s.Live) {
+			continue
+		}
+		if s.Automated && !*all {
+			hidden++
 			continue
 		}
 		out = append(out, s)
@@ -293,7 +302,13 @@ func cmdLs(a *app.App, args []string) error {
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s%s\n", s.ShortID(), s.Agent, format.Ago(s.End, now), s.ProjectName(), s.Messages, format.Tokens(s.Usage.Total()), format.Money(s.Cost), live, model.Truncate(s.DisplayTitle(), 60))
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	if hidden > 0 {
+		fmt.Printf("(%d automated sessions hidden — --all shows them)\n", hidden)
+	}
+	return nil
 }
 
 func cmdShow(a *app.App, args []string) error {
@@ -944,4 +959,51 @@ func editDocument(a *app.App, s *model.Session, r app.HandoffRequest) (string, e
 	}
 	b, err := os.ReadFile(path)
 	return string(b), err
+}
+
+func cmdSearch(a *app.App, args []string) error {
+	fs := flag.NewFlagSet("search", flag.ExitOnError)
+	n := fs.Int("n", 20, "max results")
+	asJSON := fs.Bool("json", false, "json output")
+	pos := parse(fs, args)
+	q := strings.Join(pos, " ")
+	if q == "" {
+		return fmt.Errorf("usage: optimus search TEXT")
+	}
+	hits := index.Search(a.Index().Sessions, q, *n)
+	if *asJSON {
+		type hit struct {
+			ID, Agent, Cwd, Title, Snippet, Role string
+		}
+		out := []hit{}
+		for _, h := range hits {
+			out = append(out, hit{h.Session.ID, h.Session.Agent, h.Session.Cwd, h.Session.DisplayTitle(), h.Snippet, h.Role})
+		}
+		return printJSON(out)
+	}
+	if len(hits) == 0 {
+		fmt.Println("no session mentions", strconv.Quote(q))
+		return nil
+	}
+	now := time.Now()
+	for _, h := range hits {
+		s := h.Session
+		fmt.Printf("\x1b[1m%s\x1b[0m  %s · %s · %s ago  %s\n", s.ShortID(), s.Agent, s.ProjectName(), format.Ago(s.End, now), model.Truncate(s.DisplayTitle(), 60))
+		fmt.Printf("  \x1b[2m%s:\x1b[0m %s\n\n", h.Role, highlight(h.Snippet, q))
+	}
+	return nil
+}
+
+func highlight(s, q string) string {
+	low, lq := strings.ToLower(s), strings.ToLower(q)
+	var b strings.Builder
+	for {
+		i := strings.Index(low, lq)
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		b.WriteString(s[:i] + "\x1b[1;33m" + s[i:i+len(q)] + "\x1b[0m")
+		s, low = s[i+len(q):], low[i+len(q):]
+	}
 }

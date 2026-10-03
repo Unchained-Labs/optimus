@@ -59,6 +59,9 @@ type Session struct {
 	End         time.Time `json:"end"`
 	Messages    int       `json:"messages"`
 	Buckets     []Bucket  `json:"buckets,omitempty"`
+	// Automated: started by a script or scheduler (e.g. claude -p, codex
+	// exec), not by a person. Hidden from session lists by default.
+	Automated bool `json:"automated,omitempty"`
 
 	// Filled at runtime, never cached.
 	Usage  Usage   `json:"-"`

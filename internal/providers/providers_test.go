@@ -177,3 +177,21 @@ func TestClaudeLaunchArgs(t *testing.T) {
 		t.Errorf("bare: %v", a)
 	}
 }
+
+func TestAutomatedSessions(t *testing.T) {
+	h := fakeHome(t)
+	dir := filepath.Join(h, ".claude", "projects", "-w")
+	write(t, filepath.Join(dir, "11111111-0000-0000-0000-000000000001.jsonl"),
+		`{"type":"user","entrypoint":"sdk-cli","timestamp":"2026-09-01T10:00:00Z","cwd":"/w","message":{"role":"user","content":"nightly vault cleanup"}}`+"\n")
+	write(t, filepath.Join(dir, "11111111-0000-0000-0000-000000000002.jsonl"),
+		`{"type":"user","entrypoint":"cli","timestamp":"2026-09-01T10:00:00Z","cwd":"/w","message":{"role":"user","content":"fix the bug"}}`+"\n")
+	srcs, _ := Claude{}.Discover()
+	got := map[string]bool{}
+	for _, src := range srcs {
+		s, _ := Claude{}.Parse(src)
+		got[s.FirstPrompt] = s.Automated
+	}
+	if !got["nightly vault cleanup"] || got["fix the bug"] {
+		t.Errorf("automated detection: %v", got)
+	}
+}
