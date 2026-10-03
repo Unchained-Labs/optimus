@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Unchained-Labs/optimus/internal/config"
@@ -56,5 +57,16 @@ func TestConfigSet(t *testing.T) {
 	}
 	if configSet(config.Default(), "budgets.daily_usd", "-1") == nil || configSet(config.Default(), "nope", "1") == nil {
 		t.Error("bad input accepted")
+	}
+}
+
+func TestPhoneURLs(t *testing.T) {
+	t.Setenv("OPTIMUS_HOME", t.TempDir())
+	if u := PhoneURLs("127.0.0.1:7777"); len(u) != 0 {
+		t.Errorf("loopback must not offer phone URLs: %v", u)
+	}
+	u := PhoneURLs("100.101.102.103:7777")
+	if len(u) != 1 || !strings.HasPrefix(u[0], "http://100.101.102.103:7777/?token=") {
+		t.Errorf("explicit address: %v", u)
 	}
 }

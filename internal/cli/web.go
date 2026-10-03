@@ -19,6 +19,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/config"
 	"github.com/Unchained-Labs/optimus/internal/mux"
 	"github.com/Unchained-Labs/optimus/internal/notify"
+	"github.com/Unchained-Labs/optimus/internal/qrcode"
 	"github.com/Unchained-Labs/optimus/internal/web"
 )
 
@@ -27,7 +28,8 @@ func cmdWeb(a *app.App, args []string) error {
 	addr := fs.String("addr", a.Cfg.WebAddr(), "listen address (use 0.0.0.0:7777 to reach it from your phone/LAN)")
 	bg := fs.Bool("bg", false, "run in the background (inside optimus's tmux server)")
 	stop := fs.Bool("stop", false, "stop the background dashboard")
-	urlOnly := fs.Bool("url", false, "print the dashboard URL and exit")
+	urlOnly := fs.Bool("url", false, "print the dashboard URL (and a QR code to scan with your phone) and exit")
+	noQR := fs.Bool("no-qr", false, "don't print the QR code")
 	open := fs.Bool("open", false, "open the dashboard in a browser")
 	parse(fs, args)
 	a.Cfg.Remote.Addr = *addr
@@ -37,6 +39,9 @@ func cmdWeb(a *app.App, args []string) error {
 		return mux.StopService("web")
 	case *urlOnly:
 		printURLs(a, *addr)
+		if !*noQR {
+			printQR(*addr)
+		}
 		return nil
 	case *bg:
 		self, _ := os.Executable()
@@ -60,6 +65,9 @@ func cmdWeb(a *app.App, args []string) error {
 	}
 
 	srv, err := web.New(a)
+	if err == nil {
+		srv.Addr, srv.PhoneURLs = *addr, PhoneURLs
+	}
 	if err != nil {
 		return err
 	}
@@ -106,6 +114,54 @@ func printURLs(a *app.App, addr string) {
 		}
 		fmt.Println("\n  ! listening on every interface: anyone with the token can drive your agents.")
 		fmt.Println("    Prefer a private network (Tailscale, WireGuard) over exposing this port.")
+	}
+}
+
+// PhoneURLs are the dashboard URLs reachable from other devices: Tailscale
+// addresses first, then other private ones. Empty when listening on
+// loopback only.
+func PhoneURLs(addr string) []string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil
+	}
+	tok, _ := config.WebToken()
+	var hosts []string
+	switch {
+	case host == "" || host == "0.0.0.0" || host == "::":
+		hosts = lanIPs()
+	case net.ParseIP(host) != nil && !net.ParseIP(host).IsLoopback():
+		hosts = []string{host}
+	}
+	var ts, other []string
+	for _, h := range hosts {
+		u := "http://" + net.JoinHostPort(h, port) + "/?token=" + tok
+		if strings.HasPrefix(h, "100.") {
+			ts = append(ts, u)
+		} else {
+			other = append(other, u)
+		}
+	}
+	return append(ts, other...)
+}
+
+func printQR(addr string) {
+	if st, _ := os.Stdout.Stat(); st.Mode()&os.ModeCharDevice == 0 {
+		return
+	}
+	urls := PhoneURLs(addr)
+	if len(urls) == 0 {
+		fmt.Println("\n  To open it on your phone, listen on a private network address, e.g.")
+		fmt.Println("  optimus web --addr <your-tailscale-ip>:7777   — then run this again for a QR code.")
+		return
+	}
+	q, err := qrcode.Terminal(urls[0])
+	if err != nil {
+		return
+	}
+	fmt.Printf("\n  Scan with your phone (%s):\n\n", strings.SplitN(urls[0], "/?", 2)[0])
+	for _, l := range strings.Split(strings.TrimRight(q, "\n"), "\n") {
+		fmt.Println("  " + l)
 	}
 }
 

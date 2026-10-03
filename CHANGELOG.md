@@ -12,6 +12,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Fan-out: the same task to several agents, each in its own worktree (`optimus fanout`, `F`, browser), and `optimus compare`.
 - Preview and edit a handoff before it's sent (`--edit`, "✎ preview & edit first" in the TUI, "Preview & edit" in the browser).
 - Quota-aware handoff: when an agent's quota window passes `handoff_suggest_pct` (default 85%), optimus suggests continuing its running sessions in another agent (notification, `C` in the TUI, a banner in the browser).
+- Phone: `optimus web --url` prints a QR code of the login link (Tailscale addresses first); a 📱 button shows it in the dashboard.
+- The web dashboard is an installable app (PWA: manifest, icons, service worker) — Add to Home Screen over HTTPS, e.g. with `tailscale serve`.
 - Jump to the next agent waiting for you: `Alt-n` anywhere in the multiplexer, `i` in the dashboards, `optimus next`.
 
 ### Fixed

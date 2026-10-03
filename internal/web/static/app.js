@@ -591,6 +591,25 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "/" && S.view === "sessions") { e.preventDefault(); $("#s-q").focus(); }
 });
 
+// ---------------------------------------------------------------- phone & app
+
+$("#phone-btn").addEventListener("click", async () => {
+  let r;
+  try { r = await api("/api/phone"); } catch (e) { return toast(e.message, true); }
+  $("#phone-body").innerHTML = r.urls?.length
+    ? `<p class="dim">Scan with your phone's camera. The link logs it in.</p><div class="qr">${r.svg}</div><div class="phone-url">${esc(r.urls[0].split("/?")[0])}</div>
+       <p class="dim">Then use <b>Add to Home Screen</b> to get it as an app. Installing it and system notifications need HTTPS (e.g. <code>tailscale serve</code>).</p>`
+    : `<p>This dashboard only listens on <code>${esc(r.addr)}</code>, which your phone can't reach.</p>
+       <p class="dim">Restart it on a private network address, for example your Tailscale IP:</p>
+       <pre class="mono">optimus web --stop\noptimus web --bg --addr &lt;tailscale-ip&gt;:7777</pre>
+       <p class="dim">Then open 📱 again to get a QR code.</p>`;
+  $("#dlg-phone").showModal();
+});
+$("#phone-close").addEventListener("click", () => $("#dlg-phone").close());
+
+// installable app: the service worker needs a secure context (HTTPS or localhost)
+if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
+
 refresh();
 setInterval(() => { if (!document.hidden) refresh(); }, 2500);
 setInterval(() => { if (!document.hidden && S.view === "usage") loadUsage(); }, 30000);
