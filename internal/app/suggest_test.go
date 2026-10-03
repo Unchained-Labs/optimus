@@ -36,3 +36,16 @@ func TestSuggestions(t *testing.T) {
 		t.Errorf("disabled: %+v", s)
 	}
 }
+
+func TestSpendEvents(t *testing.T) {
+	a := &App{Cfg: config.Default()}
+	idx := &index.Index{Sessions: []*model.Session{
+		{Agent: "claude", ID: "big", Cwd: "/a", Cost: 47},
+		{Agent: "claude", ID: "small", Cwd: "/b", Cost: 3},
+	}}
+	ws := []mux.Window{{ID: "@1", Name: "api", Agent: "claude", Cwd: "/a", SessionID: "big"}, {ID: "@2", Name: "web", Agent: "claude", Cwd: "/b", SessionID: "small"}}
+	ev := a.spendEvents(idx, ws, 20)
+	if len(ev) != 1 || ev[0].Window != "@1" || ev[0].Key != "spend/big/2" || ev[0].Title != "api has cost $47.00" {
+		t.Fatalf("events: %+v", ev)
+	}
+}

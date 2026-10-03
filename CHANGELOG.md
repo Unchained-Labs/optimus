@@ -19,10 +19,12 @@ All notable changes to this project are documented here. The format follows [Kee
 - Full-text search inside transcripts: `optimus search`, `S` in the Sessions view, "inside transcripts" in the browser, with the matching passage.
 - Command palette: `Ctrl-K` / `:` in the terminal dashboard and `Ctrl/Cmd-K` in the browser — agents, recent sessions, launches per project and every action, matched by words in any order.
 - Inside your own tmux (3.2+), attaching opens the agent in a popup over your pane instead of nesting tmux (`attach`: auto, popup, nested).
+- Live cost per running agent (both dashboards, `optimus ps`) and a per-session budget (`budgets.session_usd`) with notifications at each multiple.
 - Jump to the next agent waiting for you: `Alt-n` anywhere in the multiplexer, `i` in the dashboards, `optimus next`.
 
 ### Fixed
 - Claude's workspace-trust dialog was shown as busy; it's now *needs input*.
+- `optimus config set` rejected the `notifications.*`, `handoff_suggest_pct` and `attach` keys documented in this release; a test now checks every documented key.
 
 ## [0.1.0] - 2026-10-03
 

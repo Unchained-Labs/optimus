@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Unchained-Labs/optimus/internal/format"
 	"github.com/Unchained-Labs/optimus/internal/index"
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
@@ -94,4 +95,45 @@ func (a *App) SuggestionAdvisories() func() []notify.Event {
 		}
 		return out
 	}
+}
+
+// SpendAdvisories announces running sessions whose cost crosses
+// budgets.session_usd, once per multiple of the budget (1x, 2x, ...).
+func (a *App) SpendAdvisories() func() []notify.Event {
+	return func() []notify.Event {
+		limit := a.Cfg.Budgets.SessionUSD
+		if limit <= 0 {
+			return nil
+		}
+		ws, err := mux.List()
+		if err != nil || len(ws) == 0 {
+			return nil
+		}
+		return a.spendEvents(a.Index(), ws, limit)
+	}
+}
+
+func (a *App) spendEvents(idx *index.Index, ws []mux.Window, limit float64) []notify.Event {
+	var out []notify.Event
+	for _, w := range ws {
+		s := idx.ForWindow(w.Agent, w.Cwd, w.SessionID, w.Created)
+		if s == nil || s.Cost < limit {
+			continue
+		}
+		times := int(s.Cost / limit)
+		out = append(out, notify.Event{
+			Title:  fmt.Sprintf("%s has cost %s", w.Name, format.Money(s.Cost)),
+			Body:   fmt.Sprintf("over your %s per-session budget (%dx)", format.Money(limit), times),
+			Window: w.ID,
+			Key:    fmt.Sprintf("spend/%s/%d", s.ID, times),
+		})
+	}
+	return out
+}
+
+// Advisories combines everything the notifier should announce besides state
+// changes.
+func (a *App) Advisories() func() []notify.Event {
+	sug, spend := a.SuggestionAdvisories(), a.SpendAdvisories()
+	return func() []notify.Event { return append(sug(), spend()...) }
 }

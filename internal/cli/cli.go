@@ -526,11 +526,16 @@ func cmdPs(a *app.App, args []string) error {
 	}
 	now := time.Now()
 	w := table()
-	fmt.Fprintln(w, "WIN\tNAME\tAGENT\tSTATE\tPROJECT\tACTIVE\tUP\tDETAIL")
+	idx := a.Index()
+	fmt.Fprintln(w, "WIN\tNAME\tAGENT\tSTATE\tPROJECT\tACTIVE\tUP\tCOST\tDETAIL")
 	for _, x := range ws {
 		screen, _ := mux.Capture(x.ID, 30)
 		info := agentstate.Resolve(x, screen)
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s ago\t%s\t%s\n", x.Index, x.Name, x.Agent, info.State, sp(x.Cwd), format.Ago(x.Activity, now), format.Ago(x.Created, now), model.Truncate(info.Message, 60))
+		cost := "-"
+		if s := idx.ForWindow(x.Agent, x.Cwd, x.SessionID, x.Created); s != nil {
+			cost = format.Money(s.Cost)
+		}
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s ago\t%s\t%s\t%s\n", x.Index, x.Name, x.Agent, info.State, sp(x.Cwd), format.Ago(x.Activity, now), format.Ago(x.Created, now), cost, model.Truncate(info.Message, 60))
 	}
 	w.Flush()
 	if len(ws) == 0 {

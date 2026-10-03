@@ -204,7 +204,7 @@ func New() *Model {
 // startWatcher runs the notifier for as long as the TUI is open, unless the
 // web dashboard (or `optimus watch`) already does.
 func (m *Model) startWatcher() {
-	w := &notify.Watcher{Cfg: m.app.Cfg, Advisories: m.app.SuggestionAdvisories()}
+	w := &notify.Watcher{Cfg: m.app.Cfg, Advisories: m.app.Advisories()}
 	go w.Run(context.Background(), 2*time.Second)
 }
 

@@ -70,3 +70,32 @@ func TestPhoneURLs(t *testing.T) {
 		t.Errorf("explicit address: %v", u)
 	}
 }
+
+// TestDocumentedKeysAreSettable keeps docs/guide/configuration.md honest:
+// every key marked settable there must work with `optimus config set`.
+func TestDocumentedKeysAreSettable(t *testing.T) {
+	b, err := os.ReadFile("../../docs/guide/configuration.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, line := range strings.Split(string(b), "\n") {
+		cols := strings.Split(line, "|")
+		if len(cols) < 5 || strings.TrimSpace(cols[3]) != "✓" {
+			continue
+		}
+		for _, key := range strings.Split(cols[1], "`") {
+			key = strings.TrimSpace(key)
+			if key == "" || strings.ContainsAny(key, " ·/") {
+				continue
+			}
+			if _, ok := settable[key]; !ok {
+				t.Errorf("documented as settable but missing from `optimus config set`: %s", key)
+			}
+			checked++
+		}
+	}
+	if checked < 15 {
+		t.Fatalf("only %d keys checked: did the table format change?", checked)
+	}
+}

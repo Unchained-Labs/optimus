@@ -119,9 +119,9 @@ function renderFleet() {
   $("#windows").innerHTML = wins.map((w) => `
     <button class="win ${w.id === S.selected ? "on" : ""}" data-id="${esc(w.id)}">
       <div class="l1"><strong>${esc(w.name)}</strong>${stateBadge(w.state)}</div>
-      <div class="l2">${agentChip(w.agent)} ${esc(short(w.worktree ? w.worktree.repo : w.cwd))} · ${ago(w.activity)}</div>
+      <div class="l2">${agentChip(w.agent)} ${esc(short(w.worktree ? w.worktree.repo : w.cwd))} · ${ago(w.activity)}${w.cost ? ` · <span class="${st.session_budget && w.cost >= st.session_budget ? "over" : "cost"}">${money(w.cost)}</span>` : ""}</div>
       ${w.worktree ? `<div class="wt">⎇ ${esc(w.worktree.label)}</div>` : ""}
-      ${w.state === "input" && w.message ? `<div class="ask">◆ ${esc(w.message)}</div>` : w.title ? `<div class="l3">${esc(w.title)}${w.cost ? ` · <span class="dim">${money(w.cost)}</span>` : ""}</div>` : ""}
+      ${w.state === "input" && w.message ? `<div class="ask">◆ ${esc(w.message)}</div>` : w.title ? `<div class="l3">${esc(w.title)}</div>` : ""}
     </button>`).join("");
   $$("#windows .win").forEach((b) => b.addEventListener("click", () => select(b.dataset.id)));
 

@@ -374,6 +374,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	cwd, _ := os.Getwd()
 	writeJSON(w, map[string]any{
 		"suggestions":           suggestions,
+		"session_budget":        cfg.Budgets.SessionUSD,
 		"windows":               windows,
 		"outside":               outside,
 		"agents":                agents,

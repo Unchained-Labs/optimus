@@ -43,9 +43,10 @@ optimus config set KEY VALUE
 | `remote.web_autostart` | `true` | ✓ | start the web dashboard with the first session |
 | `remote.addr` | `127.0.0.1:7777` | ✓ | web dashboard address |
 | `notifications.desktop` | `true` | ✓ | desktop notifications |
-| `notifications.on_input` / `on_finish` | `true` | ✓ | notify when an agent needs input / finishes a turn |
+| `notifications.on_input` · `notifications.on_finish` | `true` | ✓ | notify when an agent needs input / finishes a turn |
 | `notifications.ntfy` | – | ✓ | ntfy topic URL for phone push |
-| `budgets.daily_usd` · `weekly_usd` · `monthly_usd` · `block_usd` | – | ✓ | spend limits shown as bars |
+| `budgets.daily_usd` · `budgets.weekly_usd` · `budgets.monthly_usd` · `budgets.block_usd` | – | ✓ | spend limits shown as bars |
+| `budgets.session_usd` | – | ✓ | notify when one running session costs this much (again at 2×, 3×…) |
 | `block_hours` | `5` | ✓ | usage-block length |
 | `handoff_max_tokens` | `20000` | ✓ | handoff document budget |
 | `handoff_suggest_pct` | `85` | ✓ | suggest moving sessions to another agent at this quota % (`-1` off) |
