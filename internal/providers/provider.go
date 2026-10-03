@@ -49,6 +49,9 @@ type Provider interface {
 type LaunchOpts struct {
 	Name          string // display name for the session
 	RemoteControl bool   // make the session controllable from the agent's own apps
+	// Hooks, when set, is the optimus binary the agent should report its
+	// lifecycle to (`optimus hook <agent>`), for reliable busy/input/idle.
+	Hooks string
 }
 
 // LiveSession is a session the agent itself reports as running (outside of

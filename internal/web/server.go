@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/config"
 	"github.com/Unchained-Labs/optimus/internal/index"
@@ -178,6 +179,8 @@ type windowView struct {
 	Agent     string    `json:"agent"`
 	Cwd       string    `json:"cwd"`
 	State     mux.State `json:"state"`
+	Message   string    `json:"message,omitempty"`
+	Since     time.Time `json:"since,omitempty"`
 	Activity  time.Time `json:"activity"`
 	Created   time.Time `json:"created"`
 	SessionID string    `json:"session_id,omitempty"`
@@ -261,7 +264,8 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	managed := map[string]bool{}
 	for _, x := range ws {
 		screen, _ := mux.Capture(x.ID, 30)
-		v := windowView{ID: x.ID, Index: x.Index, Name: x.Name, Agent: x.Agent, Cwd: x.Cwd, State: mux.Detect(x, screen), Activity: x.Activity, Created: x.Created, SessionID: x.SessionID}
+		info := agentstate.Resolve(x, screen)
+		v := windowView{ID: x.ID, Index: x.Index, Name: x.Name, Agent: x.Agent, Cwd: x.Cwd, State: info.State, Message: info.Message, Since: info.Since, Activity: x.Activity, Created: x.Created, SessionID: x.SessionID}
 		if sess := idx.ForWindow(x.Agent, x.Cwd, x.SessionID, x.Created); sess != nil {
 			v.SessionID, v.Title, v.Cost = sess.ID, sess.DisplayTitle(), sess.Cost
 			managed[sess.ID] = true
@@ -566,7 +570,7 @@ func (s *Server) screen(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, map[string]any{"screen": out, "state": mux.Detect(win, out)})
+	writeJSON(w, map[string]any{"screen": out, "state": agentstate.Resolve(win, out).State})
 }
 
 type usageRow struct {

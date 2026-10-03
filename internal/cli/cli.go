@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/clip"
 	"github.com/Unchained-Labs/optimus/internal/config"
@@ -42,6 +43,8 @@ Usage:
   optimus peek <window> [-n 40]   print the bottom of a window's screen
   optimus send <window|all> TEXT  type a prompt into one or all agents  (--no-enter)
   optimus kill <window>           stop an agent window
+  optimus next [--switch]         the agents waiting for you (Alt-n jumps to the next one)
+  optimus watch                   notify on input / finished turns (also runs inside web and the TUI)
   optimus resume <session>        reopen a past session in the multiplexer (--attach)
 
  Remote
@@ -111,6 +114,12 @@ func Run(args []string) int {
 		err = cmdHandoff(a, rest)
 	case "statusline":
 		err = cmdStatusline(a)
+	case "hook":
+		err = cmdHook(rest)
+	case "next":
+		err = cmdNext(rest)
+	case "watch":
+		err = cmdWatch(a)
 	case "web", "serve", "ui-web":
 		err = cmdWeb(a, rest)
 	case "agents", "doctor":
@@ -486,10 +495,11 @@ func cmdPs(a *app.App, args []string) error {
 	}
 	now := time.Now()
 	w := table()
-	fmt.Fprintln(w, "WIN\tNAME\tAGENT\tSTATE\tPROJECT\tACTIVE\tUP")
+	fmt.Fprintln(w, "WIN\tNAME\tAGENT\tSTATE\tPROJECT\tACTIVE\tUP\tDETAIL")
 	for _, x := range ws {
 		screen, _ := mux.Capture(x.ID, 30)
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s ago\t%s\n", x.Index, x.Name, x.Agent, mux.Detect(x, screen), sp(x.Cwd), format.Ago(x.Activity, now), format.Ago(x.Created, now))
+		info := agentstate.Resolve(x, screen)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s ago\t%s\t%s\n", x.Index, x.Name, x.Agent, info.State, sp(x.Cwd), format.Ago(x.Activity, now), format.Ago(x.Created, now), model.Truncate(info.Message, 60))
 	}
 	w.Flush()
 	if len(ws) == 0 {

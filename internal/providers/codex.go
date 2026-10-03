@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/config"
 	"github.com/Unchained-Labs/optimus/internal/model"
 )
@@ -298,14 +299,24 @@ func codexToolCall(it codexItem) model.ToolCall {
 	return model.ToolCall{Name: name}
 }
 
-func (Codex) NewArgs(prompt, _ string, _ LaunchOpts) []string {
-	if prompt == "" {
+func codexOpts(o LaunchOpts) []string {
+	if o.Hooks == "" {
 		return nil
 	}
-	return []string{prompt}
+	return []string{"-c", agentstate.CodexNotify(o.Hooks)}
 }
 
-func (Codex) ResumeArgs(id string, _ LaunchOpts) []string { return []string{"resume", id} }
+func (Codex) NewArgs(prompt, _ string, o LaunchOpts) []string {
+	a := codexOpts(o)
+	if prompt != "" {
+		a = append(a, prompt)
+	}
+	return a
+}
+
+func (Codex) ResumeArgs(id string, o LaunchOpts) []string {
+	return append(codexOpts(o), "resume", id)
+}
 
 // LatestRateLimits returns the rate_limits object from the most recent
 // token_count event of the newest rollout, if any.

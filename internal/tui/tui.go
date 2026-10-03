@@ -3,6 +3,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,11 +17,13 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/clip"
 	"github.com/Unchained-Labs/optimus/internal/index"
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/notify"
 	"github.com/Unchained-Labs/optimus/internal/providers"
 	"github.com/Unchained-Labs/optimus/internal/ratelimits"
 )
@@ -87,6 +90,7 @@ type Model struct {
 	// agents tab
 	windows []mux.Window
 	states  map[string]mux.State
+	infos   map[string]agentstate.Info
 	preview string
 	wCur    int
 	marked  map[string]bool
@@ -132,6 +136,7 @@ type indexMsg struct {
 type windowsMsg struct {
 	ws      []mux.Window
 	states  map[string]mux.State
+	infos   map[string]agentstate.Info
 	preview string
 	err     error
 }
@@ -161,11 +166,19 @@ func New() *Model {
 	f.Placeholder = "filter sessions"
 	in := textinput.New()
 	in.Prompt = "› "
-	m := &Model{app: app.New(), states: map[string]mux.State{}, marked: map[string]bool{}, filter: f, input: in, loading: true, idx: &index.Index{}}
+	m := &Model{app: app.New(), states: map[string]mux.State{}, infos: map[string]agentstate.Info{}, marked: map[string]bool{}, filter: f, input: in, loading: true, idx: &index.Index{}}
 	return m
 }
 
+// startWatcher runs the notifier for as long as the TUI is open, unless the
+// web dashboard (or `optimus watch`) already does.
+func (m *Model) startWatcher() {
+	w := &notify.Watcher{Cfg: m.app.Cfg}
+	go w.Run(context.Background(), 2*time.Second)
+}
+
 func (m *Model) Init() tea.Cmd {
+	m.startWatcher()
 	return tea.Batch(m.loadIndex(), m.pollWindows(), tick())
 }
 
@@ -194,18 +207,20 @@ func (m *Model) pollWindows() tea.Cmd {
 	return func() tea.Msg {
 		ws, err := mux.List()
 		states := map[string]mux.State{}
+		infos := map[string]agentstate.Info{}
 		preview := ""
 		if sel == "" && len(ws) > 0 {
 			sel = ws[0].ID
 		}
 		for _, w := range ws {
 			screen, _ := mux.Capture(w.ID, lines)
-			states[w.ID] = mux.Detect(w, screen)
+			info := agentstate.Resolve(w, screen)
+			states[w.ID], infos[w.ID] = info.State, info
 			if w.ID == sel {
 				preview = screen
 			}
 		}
-		return windowsMsg{ws: ws, states: states, preview: preview, err: err}
+		return windowsMsg{ws: ws, states: states, infos: infos, preview: preview, err: err}
 	}
 }
 
@@ -242,7 +257,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if w := m.selectedWindow(); w != nil {
 				cur = w.ID
 			}
-			m.windows, m.states, m.preview = msg.ws, msg.states, msg.preview
+			m.windows, m.states, m.infos, m.preview = msg.ws, msg.states, msg.infos, msg.preview
 			for i, w := range m.windows {
 				if w.ID == cur {
 					m.wCur = i
@@ -433,6 +448,17 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "n":
 		return m, m.newAgentPicker("")
+	case "i":
+		// jump to the next agent waiting for an answer
+		for k := 1; k <= len(m.windows); k++ {
+			j := (m.wCur + k) % len(m.windows)
+			if m.states[m.windows[j].ID] == mux.StateWaiting {
+				m.tab, m.wCur = tabAgents, j
+				return m, m.pollWindows()
+			}
+		}
+		m.flash("no agent needs input", false)
+		return m, nil
 	case "N":
 		agent, dir := m.app.Cfg.Agent(), m.contextDir()
 		return m, m.launch(agent, dir)

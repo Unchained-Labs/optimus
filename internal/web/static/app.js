@@ -120,7 +120,7 @@ function renderFleet() {
     <button class="win ${w.id === S.selected ? "on" : ""}" data-id="${esc(w.id)}">
       <div class="l1"><strong>${esc(w.name)}</strong>${stateBadge(w.state)}</div>
       <div class="l2">${agentChip(w.agent)} ${esc(short(w.cwd))} · ${ago(w.activity)}</div>
-      ${w.title ? `<div class="l3">${esc(w.title)}${w.cost ? ` · <span class="dim">${money(w.cost)}</span>` : ""}</div>` : ""}
+      ${w.state === "input" && w.message ? `<div class="ask">◆ ${esc(w.message)}</div>` : w.title ? `<div class="l3">${esc(w.title)}${w.cost ? ` · <span class="dim">${money(w.cost)}</span>` : ""}</div>` : ""}
     </button>`).join("");
   $$("#windows .win").forEach((b) => b.addEventListener("click", () => select(b.dataset.id)));
 
@@ -139,8 +139,15 @@ function renderFleet() {
 
   $("#empty").hidden = wins.length > 0;
   $("#pane").hidden = wins.length === 0;
+  const waitingWins = wins.filter((x) => x.state === "input");
+  $("#next-btn").hidden = waitingWins.length === 0;
+  $("#next-count").textContent = waitingWins.length;
+  document.title = waitingWins.length ? `(${waitingWins.length}) Optimus` : "Optimus";
+  notifyChanges(wins);
   const w = wins.find((x) => x.id === S.selected);
   if (w) {
+    $("#pane-ask").hidden = w.state !== "input";
+    $("#pane-ask").innerHTML = w.state === "input" ? `<b>◆ needs you</b> ${esc(w.message || "waiting for an answer")} — answer in the terminal or with the keys below` : "";
     $("#pane-name").textContent = w.name;
     $("#pane-agent").className = "chip ag-" + w.agent;
     $("#pane-agent").textContent = w.agent;
@@ -152,6 +159,47 @@ function renderFleet() {
   } else {
     disconnect();
   }
+}
+
+// ---------------------------------------------------------------- attention
+
+const lastState = {};
+function notifyChanges(wins) {
+  for (const w of wins) {
+    const prev = lastState[w.id];
+    lastState[w.id] = w.state;
+    if (prev === undefined || prev === w.state) continue;
+    if (w.state === "input") alertUser(`${w.name} needs input`, w.message || "waiting for your answer", w.id);
+    else if (w.state === "idle" && prev === "busy") alertUser(`${w.name} is done`, w.message && w.message !== "finished" ? w.message : "finished its turn", w.id);
+  }
+}
+
+function alertUser(title, body, id) {
+  if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
+    const n = new Notification(title, { body, tag: id, icon: "/static/icon.svg" });
+    n.onclick = () => { window.focus(); select(id); n.close(); };
+  } else if (!document.hidden) {
+    toast(`${title}: ${body}`);
+  }
+  if (navigator.vibrate && title.includes("needs")) navigator.vibrate([120, 60, 120]);
+}
+
+function nextWaiting() {
+  const wins = (S.state?.windows || []).filter((w) => w.state === "input");
+  if (!wins.length) return toast("No agent needs input");
+  const i = wins.findIndex((w) => w.id === S.selected);
+  select(wins[(i + 1) % wins.length].id);
+  setView("fleet");
+}
+$("#next-btn").addEventListener("click", nextWaiting);
+
+if ("Notification" in window && window.isSecureContext && Notification.permission === "default") {
+  $("#notif-btn").hidden = false;
+  $("#notif-btn").addEventListener("click", async () => {
+    const p = await Notification.requestPermission();
+    $("#notif-btn").hidden = true;
+    toast(p === "granted" ? "Notifications on: you'll be told when an agent needs you" : "Notifications blocked");
+  });
 }
 
 function select(id) {
@@ -456,6 +504,7 @@ document.addEventListener("keydown", (e) => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || document.activeElement?.closest(".xterm") || $("dialog[open]");
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "n") { e.preventDefault(); openNew(); }
+  else if (e.key === "i") { e.preventDefault(); nextWaiting(); }
   else if (e.key === "1") setView("fleet");
   else if (e.key === "2") setView("sessions");
   else if (e.key === "3") setView("usage");

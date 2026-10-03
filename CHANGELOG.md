@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+- Reliable agent states from the agents themselves: Claude Code sessions get lifecycle hooks via `--settings`, Codex gets a `notify` program; *needs input* now shows the actual question ("wants to use Write: hello.txt").
+- Notifications when an agent needs input or finishes: desktop, multiplexer status line, browser, and optional phone push via ntfy (`optimus watch`, `notifications.*` config).
+- Jump to the next agent waiting for you: `Alt-n` anywhere in the multiplexer, `i` in the dashboards, `optimus next`.
+
+### Fixed
+- Claude's workspace-trust dialog was shown as busy; it's now *needs input*.
+
 ## [0.1.0] - 2026-10-03
 
 First public release.

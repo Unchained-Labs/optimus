@@ -152,7 +152,7 @@ func (m *Model) viewFooter() string {
 	var keys [][2]string
 	switch m.tab {
 	case tabAgents:
-		keys = [][2]string{{"enter", "attach"}, {"n", "new"}, {"s", "send"}, {"b", "broadcast"}, {"space", "mark"}, {"h", "handoff"}, {"o", "transcript"}, {"r", "rename"}, {"x", "kill"}}
+		keys = [][2]string{{"enter", "attach"}, {"i", "next ◆"}, {"n", "new"}, {"s", "send"}, {"b", "broadcast"}, {"space", "mark"}, {"h", "handoff"}, {"o", "transcript"}, {"r", "rename"}, {"x", "kill"}}
 	case tabSessions:
 		keys = [][2]string{{"enter", "view"}, {"r", "resume"}, {"h", "handoff"}, {"H", "summarized handoff"}, {"y", "copy ctx"}, {"/", "filter"}, {"a", "agent"}, {"p", "project"}}
 	case tabProjects:
@@ -198,6 +198,9 @@ func (m *Model) viewAgents() string {
 		}
 		line1 := mark + sDim.Render(fmt.Sprintf("%d ", w.Index)) + sBold.Render(cell(w.Name, leftW-18)) + " " + stateBadge(m.states[w.ID])
 		line2 := "    " + agentStyle(w.Agent).Render(w.Agent) + sDim.Render(" · "+shortHome(w.Cwd)+" · "+ago(w.Activity))
+		if info := m.infos[w.ID]; info.State == mux.StateWaiting && info.Message != "" {
+			line2 = "    " + lipgloss.NewStyle().Foreground(cRed).Render("◆ "+info.Message)
+		}
 		if i == m.wCur {
 			line1 = sSel.Render(cell(line1, leftW))
 			line2 = sSel.Render(cell(line2, leftW))
@@ -522,7 +525,7 @@ func (m *Model) viewHelp() string {
 		keys  [][2]string
 	}{
 		{"Everywhere", [][2]string{{"1-4 / tab", "switch view"}, {"j k ↑ ↓", "move"}, {"n", "start an agent (pick which and where)"}, {"N", "start your default agent in this project, now"}, {"w", "open the web dashboard (phone/browser remote)"}, {"R", "rescan sessions"}, {"q", "quit (agents keep running)"}}},
-		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles agents"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
+		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
 		{"Sessions", [][2]string{{"enter", "read transcript"}, {"r", "resume in the multiplexer"}, {"h", "hand off context to a new agent, a running one, clipboard or file"}, {"H", "same, condensed by an agent first"}, {"y", "copy handoff to clipboard"}, {"/ a p esc", "filter text / agent / project / clear"}}},
 		{"Projects", [][2]string{{"enter", "sessions of this project"}, {"c", "start an agent here"}}},
 	}

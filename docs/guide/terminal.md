@@ -32,13 +32,16 @@ Agents run inside a private tmux server (`tmux -L optimus`), separate from your 
 | `○ idle` | finished, ready for the next message |
 | `✗ exit` | the agent process ended |
 
-The state comes from what's at the bottom of the agent's screen. It's a heuristic that works for the major agents' UIs.
+Claude Code and Codex sessions started by optimus report their state themselves through hooks, so *needs input* is exact and comes with the question ("wants to use Write: hello.txt"). Other agents' states come from the bottom of their screen. See [Attention & notifications](notifications.md).
+
+Press ++i++ (or ++alt+n++ while attached) to jump to the next agent waiting for you.
 
 ## Keys
 
 | Key | Agents | Sessions | Projects |
 |---|---|---|---|
 | ++enter++ | attach | read transcript | sessions of this project |
+| ++i++ | select the next agent waiting for you | ← | ← |
 | ++n++ | start an agent: pick which and where | ← | ← |
 | ++shift+n++ | start the default agent here | in the session's folder | in this project |
 | ++s++ | send a prompt | | |
