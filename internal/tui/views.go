@@ -221,9 +221,17 @@ func (m *Model) viewAgents() string {
 			mark = sKey.Render("▸ ")
 		}
 		line1 := mark + sDim.Render(fmt.Sprintf("%d ", w.Index)) + sBold.Render(cell(w.Name, leftW-18)) + " " + stateBadge(m.states[w.ID])
-		line2 := "    " + agentStyle(w.Agent).Render(w.Agent) + sDim.Render(" · "+shortHome(w.Cwd)+" · "+ago(w.Activity))
+		cost := ""
+		if s := m.sessionForWindow(w); s != nil && s.Cost > 0 {
+			st := sMoney
+			if lim := m.app.Cfg.Budgets.SessionUSD; lim > 0 && s.Cost >= lim {
+				st = lipgloss.NewStyle().Foreground(cRed).Bold(true)
+			}
+			cost = sDim.Render(" · ") + st.Render(format.Money(s.Cost))
+		}
+		line2 := "    " + agentStyle(w.Agent).Render(w.Agent) + sDim.Render(" · "+shortHome(w.Cwd)+" · "+ago(w.Activity)) + cost
 		if st, ok := m.wtStats[w.ID]; ok {
-			line2 = "    " + agentStyle(w.Agent).Render(w.Agent) + sDim.Render(" · ") + lipgloss.NewStyle().Foreground(cTeal).Render("⎇ "+st)
+			line2 = "    " + agentStyle(w.Agent).Render(w.Agent) + sDim.Render(" · ") + lipgloss.NewStyle().Foreground(cTeal).Render("⎇ "+st) + cost
 		}
 		if info := m.infos[w.ID]; info.State == mux.StateWaiting && info.Message != "" {
 			line2 = "    " + lipgloss.NewStyle().Foreground(cRed).Render("◆ "+info.Message)

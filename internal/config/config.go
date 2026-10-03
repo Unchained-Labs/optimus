@@ -15,6 +15,7 @@ type Budgets struct {
 	WeeklyUSD  float64 `json:"weekly_usd,omitempty"`
 	MonthlyUSD float64 `json:"monthly_usd,omitempty"`
 	BlockUSD   float64 `json:"block_usd,omitempty"`
+	SessionUSD float64 `json:"session_usd,omitempty"` // alert when one running session costs this much
 }
 
 // Price is USD per million tokens. Zero cache fields fall back to the

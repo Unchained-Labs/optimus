@@ -231,3 +231,6 @@ pre.diff .a { color: var(--green); } pre.diff .d { color: var(--red); } pre.diff
 .pal-item .k { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .pal-item .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pal-hint { font-size: 12px; margin: 8px 4px 0; }
+
+.win .cost { color: var(--green); font-family: var(--mono); }
+.win .over { color: var(--red); font-weight: 700; font-family: var(--mono); }

@@ -61,3 +61,11 @@ optimus config set budgets.block_usd 30
 ```
 
 Budgets appear as bars in both dashboards and in `optimus limits`, turning yellow at 60% and red at 90%.
+
+### Per-session budget
+
+```sh
+optimus config set budgets.session_usd 20
+```
+
+Every running agent shows what its session has cost so far, next to it in both dashboards and in `optimus ps`. With a per-session budget, that number turns red when a session passes it, and you get a notification at 1×, then again at 2×, 3×… the budget. That's the moment to check whether the agent is going in circles.

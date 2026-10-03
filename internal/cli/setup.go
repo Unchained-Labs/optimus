@@ -27,6 +27,26 @@ var settable = map[string]func(c *config.Config, v string) error{
 	"remote.addr":                  func(c *config.Config, v string) error { c.Remote.Addr = v; return nil },
 	"remote.claude_remote_control": boolSetter(func(c *config.Config) **bool { return &c.Remote.ClaudeRemoteControl }),
 	"remote.web_autostart":         boolSetter(func(c *config.Config) **bool { return &c.Remote.WebAutostart }),
+	"budgets.session_usd":          floatSetter(func(c *config.Config) *float64 { return &c.Budgets.SessionUSD }),
+	"notifications.desktop":        boolSetter(func(c *config.Config) **bool { return &c.Notifications.Desktop }),
+	"notifications.on_input":       boolSetter(func(c *config.Config) **bool { return &c.Notifications.OnInput }),
+	"notifications.on_finish":      boolSetter(func(c *config.Config) **bool { return &c.Notifications.OnFinish }),
+	"notifications.ntfy":           func(c *config.Config, v string) error { c.Notifications.Ntfy = v; return nil },
+	"handoff_suggest_pct": func(c *config.Config, v string) error {
+		n, err := strconv.Atoi(v)
+		if err != nil || n == 0 || n > 100 {
+			return fmt.Errorf("%q: use 1–100, or -1 to turn suggestions off", v)
+		}
+		c.SuggestPct = n
+		return nil
+	},
+	"attach": func(c *config.Config, v string) error {
+		if v != "auto" && v != "popup" && v != "nested" {
+			return fmt.Errorf("%q: use auto, popup or nested", v)
+		}
+		c.Attach = v
+		return nil
+	},
 }
 
 func settableKeys() []string {
