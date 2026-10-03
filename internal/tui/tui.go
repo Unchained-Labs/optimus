@@ -20,6 +20,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/clip"
+	"github.com/Unchained-Labs/optimus/internal/handoff"
 	"github.com/Unchained-Labs/optimus/internal/index"
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
@@ -94,6 +95,7 @@ type Model struct {
 	states  map[string]mux.State
 	infos   map[string]agentstate.Info
 	wtStats map[string]string
+	suggest []app.Suggestion
 	preview string
 	wCur    int
 	marked  map[string]bool
@@ -183,7 +185,7 @@ func New() *Model {
 // startWatcher runs the notifier for as long as the TUI is open, unless the
 // web dashboard (or `optimus watch`) already does.
 func (m *Model) startWatcher() {
-	w := &notify.Watcher{Cfg: m.app.Cfg}
+	w := &notify.Watcher{Cfg: m.app.Cfg, Advisories: m.app.SuggestionAdvisories()}
 	go w.Run(context.Background(), 2*time.Second)
 }
 
@@ -274,6 +276,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cur = w.ID
 			}
 			m.windows, m.states, m.infos, m.wtStats, m.preview = msg.ws, msg.states, msg.infos, msg.wtStats, msg.preview
+			m.suggest = m.app.Suggestions(m.idx, m.windows, m.limits)
 			for i, w := range m.windows {
 				if w.ID == cur {
 					m.wCur = i
@@ -309,6 +312,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loading = true
 		return m, tea.Batch(m.loadIndex(), m.pollWindows(), tea.ClearScreen)
+
+	case editedMsg:
+		if msg.err != nil {
+			m.flash("edit: "+msg.err.Error(), true)
+			return m, nil
+		}
+		return m, m.handoffPickerDoc(msg.s, msg.summarize, msg.doc)
 
 	case diffMsg:
 		m.busy = ""
@@ -510,6 +520,8 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.launch(agent, dir)
 	case "F":
 		return m, m.fanout()
+	case "C":
+		return m, m.continueSuggested()
 	case "w":
 		m.busy = "starting the web dashboard…"
 		a := m.app
@@ -861,7 +873,16 @@ func (m *Model) copyHandoff(s *model.Session) tea.Cmd {
 
 // handoffPicker asks where to send a session's context.
 func (m *Model) handoffPicker(s *model.Session, summarize bool) tea.Cmd {
+	return m.handoffPickerDoc(s, summarize, "")
+}
+
+// handoffPickerDoc asks where to send a session's context. doc, when set, is
+// a document the user already previewed and edited.
+func (m *Model) handoffPickerDoc(s *model.Session, summarize bool, doc string) tea.Cmd {
 	var items []pickItem
+	if doc == "" {
+		items = append(items, pickItem{label: "✎ preview & edit first", detail: "opens $EDITOR, then pick where to send it", value: "edit"})
+	}
 	for _, p := range providers.All() {
 		if providers.Installed(m.app.Cfg, p) && p.Name() != "shell" {
 			items = append(items, pickItem{label: "new " + p.Name() + " session", detail: "in " + shortHome(s.Cwd), value: "new:" + p.Name()})
@@ -877,38 +898,110 @@ func (m *Model) handoffPicker(s *model.Session, summarize bool) tea.Cmd {
 		pickItem{label: "save to file", detail: "prints the path", value: "file"},
 	)
 	title := "Hand off “" + model.Truncate(s.DisplayTitle(), 40) + "” to…"
-	if summarize {
+	switch {
+	case doc != "":
+		title += "  (edited)"
+	case summarize:
 		title += "  (condensed by " + m.app.Cfg.SummarizeWith + " first)"
 	}
 	a := m.app
+	req := app.HandoffRequest{Summarize: summarize, Doc: doc}
 	m.openPicker(title, items, false, func(m *Model, v string) tea.Cmd {
+		if v == "edit" {
+			return m.editHandoff(s, summarize)
+		}
 		m.busy = "transferring context…"
-		if summarize {
+		if summarize && doc == "" {
 			m.busy = "summarizing with " + a.Cfg.SummarizeWith + "… (this takes a moment)"
 		}
 		return func() tea.Msg {
 			switch {
 			case strings.HasPrefix(v, "new:"):
 				agent := strings.TrimPrefix(v, "new:")
-				id, path, err := a.HandoffTo(s, agent, "", "", summarize)
+				id, path, err := a.HandoffToWith(s, agent, req)
 				return doneMsg{text: "started " + agent + " with context from " + shortHome(path), err: err, attach: id}
 			case strings.HasPrefix(v, "win:"):
-				path, err := a.HandoffInto(s, strings.TrimPrefix(v, "win:"), "", summarize)
+				path, err := a.HandoffIntoWith(s, strings.TrimPrefix(v, "win:"), req)
 				return doneMsg{text: "sent context " + shortHome(path), err: err}
-			case v == "copy":
-				doc, _, err := a.HandoffDoc(s, "", summarize)
-				if err != nil {
+			}
+			text := doc
+			if text == "" {
+				var err error
+				if text, err = a.BuildHandoff(s, "", summarize); err != nil {
 					return doneMsg{err: err}
 				}
-				how, err := clip.Copy(doc)
-				return doneMsg{text: "copied handoff via " + how, err: err}
-			default:
-				_, path, err := a.HandoffDoc(s, "", summarize)
-				return doneMsg{text: "saved " + path, err: err}
 			}
+			if v == "copy" {
+				how, err := clip.Copy(text)
+				return doneMsg{text: "copied handoff via " + how, err: err}
+			}
+			path, err := handoff.Save(s, text)
+			return doneMsg{text: "saved " + path, err: err}
 		}
 	})
 	return textinput.Blink
+}
+
+type editedMsg struct {
+	s         *model.Session
+	summarize bool
+	doc       string
+	err       error
+}
+
+// editHandoff writes the document to a file, opens $EDITOR on it, and then
+// reopens the target picker with the edited text.
+func (m *Model) editHandoff(s *model.Session, summarize bool) tea.Cmd {
+	m.busy = "building handoff…"
+	doc, err := m.app.BuildHandoff(s, "", summarize)
+	m.busy = ""
+	if err != nil {
+		m.flash(err.Error(), true)
+		return nil
+	}
+	path, err := handoff.Save(s, doc)
+	if err != nil {
+		m.flash(err.Error(), true)
+		return nil
+	}
+	ed := os.Getenv("EDITOR")
+	if ed == "" {
+		ed = "vi"
+	}
+	cmd := exec.Command("sh", "-c", ed+` "$1"`, "sh", path)
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		b, rerr := os.ReadFile(path)
+		if err == nil {
+			err = rerr
+		}
+		return editedMsg{s: s, summarize: summarize, doc: string(b), err: err}
+	})
+}
+
+// continueSuggested hands the selected (or first suggested) session over to
+// the agent suggested because its own quota is running out.
+func (m *Model) continueSuggested() tea.Cmd {
+	if len(m.suggest) == 0 {
+		m.flash("no session needs to move: no agent is close to its quota", false)
+		return nil
+	}
+	sg := m.suggest[0]
+	if w := m.selectedWindow(); w != nil {
+		for _, x := range m.suggest {
+			if x.Window.ID == w.ID {
+				sg = x
+			}
+		}
+	}
+	a := m.app
+	m.confirm(fmt.Sprintf("Continue %s in %s with its context? (y/N)", sg.Window.Name, sg.To), func(m *Model) tea.Cmd {
+		m.busy = "handing off to " + sg.To + "…"
+		return func() tea.Msg {
+			id, path, err := a.HandoffToWith(sg.Session, sg.To, app.HandoffRequest{Dir: sg.Window.Cwd})
+			return doneMsg{text: "started " + sg.To + " with context from " + shortHome(path), err: err, attach: id}
+		}
+	})
+	return nil
 }
 
 // --- projects tab ------------------------------------------------------------------

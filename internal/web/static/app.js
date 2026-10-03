@@ -140,6 +140,16 @@ function renderFleet() {
 
   $("#empty").hidden = wins.length > 0;
   $("#pane").hidden = wins.length === 0;
+  const sg = st.suggestions?.[0];
+  $("#suggest").hidden = !sg;
+  if (sg) {
+    $("#suggest").innerHTML = `<b>◆ ${esc(sg.from)} ${esc(sg.quota)} quota at ${Math.round(sg.used_pct)}%</b> <span>continue <b>${esc(sg.name)}</b> in ${esc(sg.to)} with its context?</span><button class="primary" id="suggest-go">Continue in ${esc(sg.to)}</button>`;
+    $("#suggest-go").onclick = () => {
+      if (confirm(`Start ${sg.to} in ${short(sg.cwd)} with the context of ${sg.name}?`))
+        act(() => api(`/api/sessions/${encodeURIComponent(sg.session_id)}/handoff`, { method: "POST", body: { target: "new:" + sg.to, dir: sg.cwd } }), `Started ${sg.to} with the context of ${sg.name}`)
+          .then((r) => { if (r?.window) select(r.window); });
+    };
+  }
   const waitingWins = wins.filter((x) => x.state === "input");
   $("#next-btn").hidden = waitingWins.length === 0;
   $("#next-count").textContent = waitingWins.length;
@@ -490,12 +500,25 @@ function openHandoff(s) {
   $$("#handoff-targets button").forEach((b) => b.addEventListener("click", () => doHandoff(b.dataset.t)));
   $("#handoff-note").value = "";
   $("#handoff-sum").checked = false;
+  $("#handoff-doc").value = "";
+  $("#handoff-doc").dataset.edited = "";
+  $("#handoff-preview-wrap").open = false;
   $("#dlg-handoff").showModal();
 }
+
+$("#handoff-preview-wrap").addEventListener("toggle", async () => {
+  if (!$("#handoff-preview-wrap").open || $("#handoff-doc").value) return;
+  try {
+    const r = await api(`/api/sessions/${encodeURIComponent(S.handoffOf.id)}/handoff`, { method: "POST", body: { target: "preview", note: $("#handoff-note").value.trim(), summarize: $("#handoff-sum").checked } });
+    $("#handoff-doc").value = r.document;
+  } catch (e) { toast(e.message, true); }
+});
+$("#handoff-doc").addEventListener("input", () => ($("#handoff-doc").dataset.edited = "1"));
 
 async function doHandoff(target) {
   const s = S.handoffOf;
   const body = { target, note: $("#handoff-note").value.trim(), summarize: $("#handoff-sum").checked };
+  if ($("#handoff-doc").dataset.edited) body.document = $("#handoff-doc").value;
   $$("#handoff-targets button").forEach((b) => (b.disabled = true));
   if (body.summarize) toast("Condensing with an agent… this can take a minute");
   const r = await act(() => api(`/api/sessions/${encodeURIComponent(s.id)}/handoff`, { method: "POST", body }));

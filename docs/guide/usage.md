@@ -34,6 +34,8 @@ optimus blocks -n 5
 optimus limits
 ```
 
+Near the limit, optimus suggests continuing running sessions in another agent. See [Sessions & handoff → When quota runs low](sessions.md#when-quota-runs-low).
+
 As a bonus, the status line becomes a compact summary:
 
 ```text

@@ -54,16 +54,20 @@ type Notifications struct {
 }
 
 type Config struct {
-	DefaultAgent    string           `json:"default_agent,omitempty"`
-	Notifications   Notifications    `json:"notifications"`
-	Remote          Remote           `json:"remote"`
-	Budgets         Budgets          `json:"budgets"`
-	BlockHours      int              `json:"block_hours,omitempty"`
-	Pricing         map[string]Price `json:"pricing,omitempty"` // keyed by model-id prefix
-	Agents          map[string]Agent `json:"agents,omitempty"`
-	HandoffTokens   int              `json:"handoff_max_tokens,omitempty"`
-	SummarizeWith   string           `json:"summarize_with,omitempty"` // agent used by `handoff --summarize`
-	StatuslineChain string           `json:"statusline_chain,omitempty"`
+	DefaultAgent  string           `json:"default_agent,omitempty"`
+	Notifications Notifications    `json:"notifications"`
+	Remote        Remote           `json:"remote"`
+	Budgets       Budgets          `json:"budgets"`
+	BlockHours    int              `json:"block_hours,omitempty"`
+	Pricing       map[string]Price `json:"pricing,omitempty"` // keyed by model-id prefix
+	Agents        map[string]Agent `json:"agents,omitempty"`
+	HandoffTokens int              `json:"handoff_max_tokens,omitempty"`
+	// SuggestPct: when an agent's quota window reaches this %, suggest
+	// continuing its running sessions in another agent (default 85, -1 off).
+	SuggestPct      int               `json:"handoff_suggest_pct,omitempty"`
+	SuggestTo       map[string]string `json:"handoff_suggest_to,omitempty"` // e.g. {"claude":"codex"}
+	SummarizeWith   string            `json:"summarize_with,omitempty"`     // agent used by `handoff --summarize`
+	StatuslineChain string            `json:"statusline_chain,omitempty"`
 }
 
 func Default() Config {
@@ -83,6 +87,13 @@ func (c Config) WebAddr() string {
 		return c.Remote.Addr
 	}
 	return "127.0.0.1:7777"
+}
+
+func (c Config) SuggestThreshold() float64 {
+	if c.SuggestPct == 0 {
+		return 85
+	}
+	return float64(c.SuggestPct)
 }
 
 func (c Config) Agent() string {

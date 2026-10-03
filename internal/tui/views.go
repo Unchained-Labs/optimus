@@ -253,6 +253,12 @@ func (m *Model) viewAgents() string {
 		rows = append(rows, "", sHead.Render("  OUTSIDE OPTIMUS"))
 		rows = append(rows, ext...)
 	}
+	if len(m.suggest) > 0 {
+		sg := m.suggest[0]
+		banner := lipgloss.NewStyle().Foreground(cYellow).Render(fmt.Sprintf("◆ %s %s quota %.0f%%", sg.From, sg.Quota.Name, sg.Quota.UsedPct)) +
+			sDim.Render(" · ") + sKey.Render("C") + sDim.Render(" continue "+sg.Window.Name+" in "+sg.To)
+		rows = append([]string{cell(banner, leftW), ""}, rows...)
+	}
 	left := fitLines(strings.Join(rows, "\n"), leftW, h)
 
 	// live preview of the selected pane, bottom-aligned like a terminal
@@ -552,7 +558,7 @@ func (m *Model) viewHelp() string {
 		keys  [][2]string
 	}{
 		{"Everywhere", [][2]string{{"1-4 / tab", "switch view"}, {"j k ↑ ↓", "move"}, {"n", "start an agent (pick which and where)"}, {"N", "start your default agent in this project, now"}, {"w", "open the web dashboard (phone/browser remote)"}, {"R", "rescan sessions"}, {"q", "quit (agents keep running)"}}},
-		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"!", "answer it without attaching: shows its question, forwards 1/2/3, y/n, enter"}, {"F", "fan out: same task to several agents, each in its own worktree"}, {"D / M / X", "worktree agents: review diff / merge into the repo / discard"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
+		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"!", "answer it without attaching: shows its question, forwards 1/2/3, y/n, enter"}, {"F", "fan out: same task to several agents, each in its own worktree"}, {"C", "quota running out: continue the session in another agent"}, {"D / M / X", "worktree agents: review diff / merge into the repo / discard"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
 		{"Sessions", [][2]string{{"enter", "read transcript"}, {"r", "resume in the multiplexer"}, {"h", "hand off context to a new agent, a running one, clipboard or file"}, {"H", "same, condensed by an agent first"}, {"y", "copy handoff to clipboard"}, {"/ a p esc", "filter text / agent / project / clear"}}},
 		{"Projects", [][2]string{{"enter", "sessions of this project"}, {"c", "start an agent here"}}},
 	}

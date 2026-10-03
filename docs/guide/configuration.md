@@ -47,6 +47,8 @@ optimus config set KEY VALUE
 | `budgets.daily_usd` · `weekly_usd` · `monthly_usd` · `block_usd` | – | ✓ | spend limits shown as bars |
 | `block_hours` | `5` | ✓ | usage-block length |
 | `handoff_max_tokens` | `20000` | ✓ | handoff document budget |
+| `handoff_suggest_pct` | `85` | ✓ | suggest moving sessions to another agent at this quota % (`-1` off) |
+| `handoff_suggest_to.<agent>` | `claude→codex`, `codex→claude` | | where to suggest continuing |
 | `summarize_with` | `claude` | ✓ | agent used by `--summarize` / ++shift+h++ |
 | `statusline_chain` | – | ✓ | your previous status line, run behind optimus |
 | `agents.<name>.command` | the agent's usual binary | | use a different binary |

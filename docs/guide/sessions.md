@@ -68,6 +68,27 @@ Send it wherever you need:
 
 ![Handoff](../images/web-handoff.png)
 
+### Review before sending
+
+Check (and edit) exactly what the next agent will read:
+
+- **Terminal dashboard:** pick **✎ preview & edit first** in the target picker. The document opens in `$EDITOR`; save, close, then choose where to send it.
+- **Browser:** open **✎ Preview & edit the document** in the Handoff dialog, edit, then click a target.
+- **Shell:** `optimus handoff 3f2a --to codex --edit`.
+
+### When quota runs low
+
+When an agent's plan quota window reaches `handoff_suggest_pct` (default 85%), optimus suggests continuing its running sessions in another agent, Claude ↔ Codex by default:
+
+- a notification once per session and quota window,
+- a banner in both dashboards: ++shift+c++ in the terminal dashboard, **Continue in codex** in the browser.
+
+```sh
+optimus config set handoff_suggest_pct 90     # -1 turns suggestions off
+```
+
+Change the target per agent with `"handoff_suggest_to": {"claude": "opencode"}` in the config. Claude quota needs the status line hooked up (`optimus config statusline --install`); Codex reports it on its own.
+
 The document is saved in `~/.local/state/optimus/handoffs/`. The receiving agent gets a one-line prompt pointing to it ("Read the handoff document at … then continue"), which works the same for every agent and never hits argument or paste-size limits.
 
 !!! note "Token budget"

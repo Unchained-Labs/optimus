@@ -37,6 +37,7 @@
       <div id="quick" class="quick"></div>
     </aside>
     <div class="fleet-main">
+      <div id="suggest" class="suggest" hidden></div>
       <div id="empty" class="empty" hidden>
         <h1>Your agent fleet</h1>
         <p>Start a coding agent in any project. It keeps running in optimus's tmux server; drive it from here, from your phone, or from the terminal with <code>optimus</code>.</p>
@@ -137,6 +138,11 @@
     <h2>Hand off context</h2>
     <p class="dim" id="handoff-what"></p>
     <div class="targets" id="handoff-targets"></div>
+    <details id="handoff-preview-wrap">
+      <summary>✎ Preview &amp; edit the document</summary>
+      <textarea id="handoff-doc" rows="14" class="mono" placeholder="loading…"></textarea>
+      <div class="dim">Edits are sent as-is to whichever target you pick above.</div>
+    </details>
     <label class="lbl" for="handoff-note">Note for the next agent <span class="dim">(optional)</span></label>
     <textarea id="handoff-note" rows="2" placeholder="e.g. focus on the failing test"></textarea>
     <label class="toggle"><input type="checkbox" id="handoff-sum"> Condense with an agent first <span class="dim">(uses tokens)</span></label>

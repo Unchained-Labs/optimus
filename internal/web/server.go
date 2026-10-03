@@ -21,6 +21,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/handoff"
 	"github.com/Unchained-Labs/optimus/internal/index"
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
@@ -334,9 +335,25 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		sum.Budget = []usage.Budget{}
 	}
 
+	type suggestionView struct {
+		Window    string  `json:"window"`
+		Name      string  `json:"name"`
+		SessionID string  `json:"session_id"`
+		Title     string  `json:"title"`
+		Cwd       string  `json:"cwd"`
+		From      string  `json:"from"`
+		To        string  `json:"to"`
+		Quota     string  `json:"quota"`
+		UsedPct   float64 `json:"used_pct"`
+	}
+	suggestions := []suggestionView{}
+	for _, sg := range s.app.Suggestions(idx, ws, limits) {
+		suggestions = append(suggestions, suggestionView{sg.Window.ID, sg.Window.Name, sg.Session.ID, sg.Session.DisplayTitle(), sg.Window.Cwd, sg.From, sg.To, sg.Quota.Name, sg.Quota.UsedPct})
+	}
 	home, _ := os.UserHomeDir()
 	cwd, _ := os.Getwd()
 	writeJSON(w, map[string]any{
+		"suggestions":           suggestions,
 		"windows":               windows,
 		"outside":               outside,
 		"agents":                agents,
@@ -430,34 +447,51 @@ func (s *Server) handoff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Target    string `json:"target"` // new:<agent> | win:<id> | file
+		Target    string `json:"target"` // new:<agent> | win:<id> | file | preview
 		Note      string `json:"note"`
 		Summarize bool   `json:"summarize"`
 		Dir       string `json:"dir"`
+		Document  string `json:"document"` // edited document to send instead of building one
 	}
 	if err := readJSON(r, &req); err != nil {
 		httpErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	hr := app.HandoffRequest{Note: req.Note, Summarize: req.Summarize, Doc: req.Document, Dir: req.Dir}
 	switch {
+	case req.Target == "preview":
+		doc, err := s.app.BuildHandoff(ss, req.Note, req.Summarize)
+		if err != nil {
+			httpErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, map[string]string{"document": doc})
 	case strings.HasPrefix(req.Target, "new:"):
-		id, path, err := s.app.HandoffTo(ss, strings.TrimPrefix(req.Target, "new:"), req.Dir, req.Note, req.Summarize)
+		id, path, err := s.app.HandoffToWith(ss, strings.TrimPrefix(req.Target, "new:"), hr)
 		if err != nil {
 			httpErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		writeJSON(w, map[string]string{"window": id, "path": path})
 	case strings.HasPrefix(req.Target, "win:"):
-		path, err := s.app.HandoffInto(ss, strings.TrimPrefix(req.Target, "win:"), req.Note, req.Summarize)
+		path, err := s.app.HandoffIntoWith(ss, strings.TrimPrefix(req.Target, "win:"), hr)
 		if err != nil {
 			httpErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		writeJSON(w, map[string]string{"path": path})
 	default:
-		doc, path, err := s.app.HandoffDoc(ss, req.Note, req.Summarize)
+		doc := req.Document
+		if strings.TrimSpace(doc) == "" {
+			var err error
+			if doc, err = s.app.BuildHandoff(ss, req.Note, req.Summarize); err != nil {
+				httpErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+		}
+		path, err := handoff.Save(ss, doc)
 		if err != nil {
-			httpErr(w, http.StatusBadRequest, err.Error())
+			httpErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		writeJSON(w, map[string]string{"path": path, "document": doc})

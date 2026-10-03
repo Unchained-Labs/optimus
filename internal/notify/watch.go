@@ -24,6 +24,12 @@ type Watcher struct {
 	// OnChange, if set, is called for every state change (used by tests and
 	// the web dashboard).
 	OnChange func(w mux.Window, from, to mux.State, info agentstate.Info)
+	// Advisories, if set, is polled about every 30s for other things worth a
+	// notification (e.g. quota running out); each Key is sent once.
+	Advisories func() []Event
+
+	ticks int
+	sent  map[string]bool
 }
 
 func lockPath() string { return filepath.Join(config.StateDir(), "watcher.lock") }
@@ -73,7 +79,17 @@ func (w *Watcher) Tick() {
 	defer w.mu.Unlock()
 	if w.last == nil {
 		w.last = map[string]mux.State{}
+		w.sent = map[string]bool{}
 	}
+	if w.Advisories != nil && w.ticks%15 == 0 {
+		for _, e := range w.Advisories() {
+			if !w.sent[e.Key] {
+				w.sent[e.Key] = true
+				Send(w.Cfg, e)
+			}
+		}
+	}
+	w.ticks++
 	alive := map[string]bool{}
 	seen := map[string]bool{}
 	for _, win := range ws {
