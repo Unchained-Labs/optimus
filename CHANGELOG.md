@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-04
+
+Bring in agents started elsewhere, and a browser terminal that survives sleep, backgrounding and flaky networks.
+
 ### Fixed
 - Agents launched by optimus from inside a Claude Code session inherited its session markers, so Claude Code treated them as child sessions and didn't save their transcripts.
 - Browser terminal could freeze or stay blank after a connection died silently (laptop sleep, phone in the background, a dropped network path). Terminals now send a heartbeat; the page reconnects after 40 s of silence, when it becomes visible again, or when the network comes back, and the server drops viewers whose browser is gone.
@@ -59,6 +63,7 @@ First public release.
 ### Fixed
 - Agents not listed (and the web terminal returning 404) on tmux 3.3+, which escapes control characters in format output.
 
-[Unreleased]: https://github.com/Unchained-Labs/optimus/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Unchained-Labs/optimus/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Unchained-Labs/optimus/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Unchained-Labs/optimus/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Unchained-Labs/optimus/releases/tag/v0.1.0
