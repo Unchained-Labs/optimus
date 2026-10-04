@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+- Browser terminal could freeze or stay blank after a connection died silently (laptop sleep, phone in the background, a dropped network path). Terminals now send a heartbeat; the page reconnects after 40 s of silence, when it becomes visible again, or when the network comes back, and the server drops viewers whose browser is gone.
+- Late output from the previous agent could be painted into the terminal after switching agents.
+- After selecting an agent, keystrokes went to the page instead of the terminal (and could trigger shortcuts); the terminal now takes focus (desktop).
+
+### Added
+- A connection dot next to each agent's name in the browser: green live, yellow connecting, red lost (click to reconnect).
+
 ## [0.2.0] - 2026-10-03
 
 Run a fleet without babysitting it: agents tell you when they need you, you answer without attaching, parallel agents get their own worktrees, and context moves before quota runs out.

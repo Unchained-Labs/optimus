@@ -215,9 +215,12 @@ if ("Notification" in window && window.isSecureContext && Notification.permissio
 }
 
 function select(id) {
+  if (id === S.selected && term.link === "lost") term.attached = ""; // clicking a dead view reconnects it
   S.selected = id;
   localStorage.setItem("optimus.win", id);
   renderFleet();
+  // keystrokes should go to the agent, not the page (no keyboard pop-up on phones)
+  if (!isTouch) setTimeout(() => term.xterm?.focus(), 0);
 }
 
 // ---------------------------------------------------------------- terminal
@@ -257,25 +260,68 @@ function disconnect() {
   term.attached = "";
 }
 
+const isTouch = matchMedia("(pointer: coarse)").matches;
+
+function setLink(state) {
+  term.link = state;
+  const el = $("#pane-link");
+  if (!el) return;
+  el.className = "link " + state;
+  el.title = { live: "Live terminal", connecting: "Connecting…", lost: "Connection lost — click to reconnect" }[state] || "";
+}
+
 function connect(id) {
   ensureTerm();
   disconnect();
   term.attached = id;
   term.xterm.reset();
   fit();
+  setLink("connecting");
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/api/term/${encodeURIComponent(id)}?cols=${term.xterm.cols}&rows=${term.xterm.rows}`);
   ws.binaryType = "arraybuffer";
-  ws.onmessage = (e) => term.xterm.write(typeof e.data === "string" ? e.data : new Uint8Array(e.data));
-  ws.onopen = () => fit();
+  term.lastMsg = Date.now();
+  // every handler checks it still belongs to the current connection: after a
+  // switch, late output from the previous agent must never reach the screen
+  ws.onmessage = (e) => {
+    if (term.ws !== ws) return;
+    term.lastMsg = Date.now();
+    if (typeof e.data === "string") {
+      if (e.data.startsWith("{")) return; // control message (heartbeat)
+      term.xterm.write(e.data);
+    } else term.xterm.write(new Uint8Array(e.data));
+  };
+  ws.onopen = () => {
+    if (term.ws !== ws) return;
+    setLink("live");
+    fit();
+    if (!isTouch && !document.querySelector("dialog[open]") && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName)) term.xterm.focus();
+  };
   ws.onclose = () => {
     if (term.ws !== ws) return;
-    term.xterm.write("\r\n\x1b[2m[disconnected — reconnecting…]\x1b[0m\r\n");
+    setLink("lost");
+    term.xterm.write("\r\n\x1b[2m[connection lost — reconnecting…]\x1b[0m\r\n");
     term.attached = "";
+    term.ws = null;
     setTimeout(refresh, 1500);
   };
   term.ws = ws;
 }
+
+// Reconnect when the connection died silently (laptop sleep, phone in the
+// background, a network or Tailscale path dropping): the server sends a
+// heartbeat every 15s, so 40s of silence means the link is gone.
+function checkLink(force) {
+  if (!S.selected || S.view !== "fleet") return;
+  const stale = !term.ws || term.ws.readyState > 1 || Date.now() - (term.lastMsg || 0) > 40000;
+  if (force || stale) {
+    term.attached = "";
+    connect(S.selected);
+  }
+}
+setInterval(() => { if (!document.hidden) checkLink(false); }, 5000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { refresh(); checkLink(false); } });
+window.addEventListener("online", () => checkLink(true));
 
 // phone-friendly keys for answering prompts without a keyboard
 const KEYS = [["Esc", "Escape"], ["↵", "Enter"], ["↑", "Up"], ["↓", "Down"], ["Tab", "Tab"], ["⇧Tab", "BTab"], ["1", "1"], ["2", "2"], ["3", "3"], ["y", "y"], ["n", "n"], ["^C", "C-c"]];
@@ -301,6 +347,8 @@ $("#prompt-form").addEventListener("submit", async (e) => {
   $("#prompt").value = "";
   $("#prompt").style.height = "auto";
 });
+
+$("#pane-link").addEventListener("click", () => checkLink(true));
 
 $("#act-kill").addEventListener("click", () => {
   const w = S.state.windows.find((x) => x.id === S.selected);
