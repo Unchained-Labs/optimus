@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
 	"github.com/Unchained-Labs/optimus/internal/notify"
+	"github.com/Unchained-Labs/optimus/internal/outside"
 	"github.com/Unchained-Labs/optimus/internal/providers"
 	"github.com/Unchained-Labs/optimus/internal/ratelimits"
 	"github.com/Unchained-Labs/optimus/internal/worktree"
@@ -106,6 +108,7 @@ type Model struct {
 	states  map[string]mux.State
 	infos   map[string]agentstate.Info
 	wtStats map[string]string
+	outside []outside.Agent
 	suggest []app.Suggestion
 	preview string
 	wCur    int
@@ -159,6 +162,7 @@ type windowsMsg struct {
 	states  map[string]mux.State
 	infos   map[string]agentstate.Info
 	wtStats map[string]string
+	outside []outside.Agent
 	preview string
 	err     error
 }
@@ -235,8 +239,11 @@ func (m *Model) pollWindows() tea.Cmd {
 		sel = w.ID
 	}
 	lines := max(m.h, 40)
+	idx := m.idx
 	return func() tea.Msg {
 		ws, err := mux.List()
+		outs := outside.Scan(idx)
+		ws = append(ws, outside.Windows(outs)...) // agents in your own tmux
 		states := map[string]mux.State{}
 		infos := map[string]agentstate.Info{}
 		wtStats := map[string]string{}
@@ -257,7 +264,7 @@ func (m *Model) pollWindows() tea.Cmd {
 				preview = screen
 			}
 		}
-		return windowsMsg{ws: ws, states: states, infos: infos, wtStats: wtStats, preview: preview, err: err}
+		return windowsMsg{ws: ws, states: states, infos: infos, wtStats: wtStats, outside: outs, preview: preview, err: err}
 	}
 }
 
@@ -295,6 +302,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cur = w.ID
 			}
 			m.windows, m.states, m.infos, m.wtStats, m.preview = msg.ws, msg.states, msg.infos, msg.wtStats, msg.preview
+			m.outside = msg.outside
 			m.suggest = m.app.Suggestions(m.idx, m.windows, m.limits)
 			for i, w := range m.windows {
 				if w.ID == cur {
@@ -553,6 +561,8 @@ func (m *Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.launch(agent, dir)
 	case "F":
 		return m, m.fanout()
+	case "T":
+		return m, m.takeOverPicker()
 	case "C":
 		return m, m.continueSuggested()
 	case "w":
@@ -1456,6 +1466,59 @@ func (m *Model) palette() tea.Cmd {
 			}
 		}
 		return nil
+	})
+	return textinput.Blink
+}
+
+// takeOverPicker moves an agent running outside optimus into it: the selected
+// linked agent, or one picked from those running in terminal tabs.
+func (m *Model) takeOverPicker() tea.Cmd {
+	var cands []outside.Agent
+	if w := m.selectedWindow(); w != nil && w.External {
+		for _, o := range m.outside {
+			if o.Pane != nil && o.Pane.ID() == w.ID {
+				cands = []outside.Agent{o}
+			}
+		}
+	}
+	if len(cands) == 0 {
+		for _, o := range m.outside {
+			if !o.Container && o.SessionID != "" {
+				cands = append(cands, o)
+			}
+		}
+	}
+	if len(cands) == 0 {
+		m.flash("no agent outside optimus can be taken over", false)
+		return nil
+	}
+	var items []pickItem
+	for _, o := range cands {
+		label := o.Agent + " in " + model.ProjectName(o.Cwd)
+		if o.Title != "" {
+			label += " — " + model.Truncate(o.Title, 40)
+		}
+		items = append(items, pickItem{label: label, detail: o.Status + " · " + o.Where(), value: strconv.Itoa(o.PID)})
+	}
+	a, idx := m.app, m.idx
+	m.openPicker("Take over — stop it where it runs and continue the same session here", items, false, func(m *Model, v string) tea.Cmd {
+		ag, ok := a.FindOutside(idx, v)
+		if !ok {
+			m.flash("it's gone", true)
+			return nil
+		}
+		run := func(force bool) tea.Cmd {
+			m.busy = "taking over " + ag.Agent + "…"
+			return func() tea.Msg {
+				id, err := a.TakeOver(idx, ag, force)
+				return doneMsg{text: ag.Agent + " now runs in optimus", err: err, attach: id, reload: true}
+			}
+		}
+		if ag.Status == "busy" {
+			m.confirm("It's mid-turn: stopping it cuts that turn short. Take it over anyway? (y/N)", func(m *Model) tea.Cmd { return run(true) })
+			return nil
+		}
+		return run(false)
 	})
 	return textinput.Blink
 }

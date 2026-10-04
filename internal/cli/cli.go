@@ -52,6 +52,8 @@ Usage:
   optimus answer <window> KEY…    answer a prompt without attaching (e.g. 1, y, Enter, Escape)
   optimus watch                   notify on input / finished turns (also runs inside web and the TUI)
   optimus resume <session>        reopen a past session in the multiplexer (--attach)
+  optimus takeover <pid|session>  move an agent running outside optimus into it (stops it, resumes
+                                  the same session here; --force if it's mid-turn, --attach)
 
  Remote
   optimus web                     browser dashboard with live terminals  (--bg, --open, --url, --stop,
@@ -137,6 +139,8 @@ func Run(args []string) int {
 		err = cmdCompare(rest)
 	case "watch":
 		err = cmdWatch(a)
+	case "takeover", "adopt", "grab":
+		err = cmdTakeover(a, rest)
 	case "fleet":
 		err = cmdFleet(a, rest)
 	case "web", "serve", "ui-web":
@@ -541,23 +545,61 @@ func cmdPs(a *app.App, args []string) error {
 	if len(ws) == 0 {
 		fmt.Println("(no agents in the optimus multiplexer — start one with `optimus new claude`)")
 	}
-	var others []providers.LiveSession
-	for _, p := range providers.All() {
-		if lr, ok := p.(providers.LiveReporter); ok {
-			others = append(others, lr.Live()...)
-		}
-	}
-	managed := map[int]bool{}
-	for _, x := range ws {
-		managed[x.PID] = true
-	}
-	if len(others) > 0 {
-		fmt.Println("\nOther live sessions (outside optimus)")
+	if out := a.Outside(idx); len(out) > 0 {
+		fmt.Println("\nOutside optimus")
 		w = table()
-		for _, l := range others {
-			fmt.Fprintf(w, "  %s\t%s\t%s\tpid %d\t%s\n", l.Agent, l.Status, sp(l.Cwd), l.PID, l.ID)
+		for _, o := range out {
+			how := "optimus takeover " + strconv.Itoa(o.PID)
+			if o.Pane != nil {
+				how = "linked: " + o.Pane.ID() + "  (or optimus takeover " + strconv.Itoa(o.PID) + ")"
+			}
+			switch {
+			case o.Container:
+				how = "runs in a container — its session lives there"
+			case o.SessionID == "":
+				how = "session unknown — can't be resumed here"
+			}
+			st := o.Status
+			if st == "" {
+				st = "-"
+			}
+			fmt.Fprintf(w, "  %s\t%s\t%s\tin %s\t%s\n", o.Agent, st, sp(o.Cwd), o.Where(), how)
 		}
 		w.Flush()
+	}
+	return nil
+}
+
+// cmdTakeover moves an agent running outside optimus into it: the process is
+// asked to exit and the same session resumes in the multiplexer.
+func cmdTakeover(a *app.App, args []string) error {
+	fs := flag.NewFlagSet("takeover", flag.ExitOnError)
+	force := fs.Bool("force", false, "stop it even in the middle of a turn")
+	attach := fs.Bool("attach", false, "attach once it runs in optimus")
+	pos := parse(fs, args)
+	idx := a.Index()
+	if len(pos) == 0 {
+		out := a.Outside(idx)
+		if len(out) == 0 {
+			return fmt.Errorf("no agent is running outside optimus")
+		}
+		fmt.Println("usage: optimus takeover <pid|session|ext:pane> [--force]\n\nagents outside optimus:")
+		for _, o := range out {
+			fmt.Printf("  %d\t%s\t%s\t%s\t%s\n", o.PID, o.Agent, o.Status, sp(o.Cwd), model.Truncate(o.Title, 50))
+		}
+		return nil
+	}
+	ag, ok := a.FindOutside(idx, pos[0])
+	if !ok {
+		return fmt.Errorf("no agent outside optimus matches %q (see optimus ps)", pos[0])
+	}
+	id, err := a.TakeOver(idx, ag, *force)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s %s now runs in optimus (window %s); its old terminal has exited\n", ag.Agent, model.Truncate(ag.Title, 50), id)
+	if *attach {
+		return mux.AttachCmd(id).Run()
 	}
 	return nil
 }

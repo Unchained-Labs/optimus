@@ -24,6 +24,7 @@ See what they cost, how much quota is left, and hand context from one session to
 
 - **One fleet:** start any agent in any project. Each runs in optimus's own tmux server, keeps going after you close the UI, and tells you, with a notification, when one needs you.
 - **Terminal, browser, phone:** a keyboard-driven dashboard, plus a web dashboard with live interactive terminals that works on a phone. Remote control is on by default.
+- **Bring in agents started elsewhere:** link agents running in your own tmux, or take over one from a terminal tab and continue the same session in optimus.
 - **Every session, every agent:** a searchable history with transcripts, tokens and cost. Resume any session.
 - **Parallel without collisions:** give each agent its own git worktree, or fan a task out to several agents and merge the best result.
 - **Context that travels:** hand a session's goal, changed files and recent conversation to a new agent (Claude → Codex works) or to one that's already running.

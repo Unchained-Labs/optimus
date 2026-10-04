@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +30,10 @@ func setup(t *testing.T) (*httptest.Server, *Server) {
 	t.Setenv("CLAUDE_CONFIG_DIR", dir+"/home/.claude")
 	sock := fmt.Sprintf("optimus-test-%d", time.Now().UnixNano())
 	mux.Socket = sock
-	t.Cleanup(func() { exec.Command("tmux", "-L", sock, "kill-server").Run() })
+	t.Cleanup(func() {
+		exec.Command("tmux", "-L", sock, "kill-server").Run()
+		os.Remove(filepath.Join(tmuxDir(), sock)) // tmux can leave the socket file behind
+	})
 	a := app.New()
 	off := false
 	a.Cfg.Remote.WebAutostart = &off
@@ -391,4 +395,11 @@ func TestTerminalHeartbeat(t *testing.T) {
 			return
 		}
 	}
+}
+
+func tmuxDir() string {
+	if d := os.Getenv("TMUX_TMPDIR"); d != "" {
+		return filepath.Join(d, fmt.Sprintf("tmux-%d", os.Getuid()))
+	}
+	return fmt.Sprintf("/tmp/tmux-%d", os.Getuid())
 }

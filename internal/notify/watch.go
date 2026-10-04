@@ -11,6 +11,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/config"
 	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/outside"
 )
 
 // Watcher turns agent state changes into notifications. Only one watcher
@@ -75,6 +76,7 @@ func (w *Watcher) Tick() {
 	if err != nil {
 		return
 	}
+	ws = append(ws, outside.Windows(outside.Scan(nil))...) // agents in your own tmux, too
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.last == nil {
