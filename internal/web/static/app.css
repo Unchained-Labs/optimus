@@ -234,3 +234,9 @@ pre.diff .a { color: var(--green); } pre.diff .d { color: var(--red); } pre.diff
 
 .win .cost { color: var(--green); font-family: var(--mono); }
 .win .over { color: var(--red); font-weight: 700; font-family: var(--mono); }
+
+/* terminal connection indicator */
+button.link { width: 10px; height: 10px; min-width: 10px; padding: 0; border-radius: 50%; border: 0; background: var(--faint); }
+button.link.live { background: var(--green); }
+button.link.connecting { background: var(--yellow); animation: pulse 1s infinite; }
+button.link.lost { background: var(--red); cursor: pointer; }

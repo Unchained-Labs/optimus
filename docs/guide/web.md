@@ -76,6 +76,10 @@ optimus web --stop     # stop the background dashboard
 
 Claude sessions started or resumed by optimus also get Claude Code's own `--remote-control=<name>`, so they appear in the Claude desktop, web and mobile apps. Turn it off globally with `optimus config set remote.claude_remote_control false`, or per session in the **New session** dialog.
 
+## If a terminal looks stuck
+
+The dot next to the agent's name shows the terminal link: green is live, yellow is connecting, red means lost. Click it to reconnect. The page also reconnects on its own when the link goes quiet for 40 seconds, when the tab comes back to the foreground, or when the network returns.
+
 ## How the terminals work
 
 Each browser terminal is a private tmux session *grouped* with the agents' session: it shares the windows but has its own current window and size. It's attached through a pty and streamed to [xterm.js](https://xtermjs.org) over a websocket. Watching an agent from your phone doesn't move the window you're looking at on your laptop, and closing the tab removes the view, never the agent.

@@ -13,6 +13,9 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/mux"
 )
 
+// heartbeat is how often a live terminal proves it's alive (tests shorten it).
+var heartbeat = 15 * time.Second
+
 // term bridges a browser terminal (xterm.js) to a private tmux view of one
 // agent window over a websocket. Binary frames carry terminal bytes both
 // ways; text frames from the browser carry control messages (resize).
@@ -69,6 +72,31 @@ func (s *Server) term(w http.ResponseWriter, r *http.Request) {
 			}
 			if err != nil {
 				c.Close(websocket.StatusNormalClosure, "session ended")
+				return
+			}
+		}
+	}()
+
+	// heartbeat: a text frame the page watches for (to notice a silently dead
+	// link), plus a protocol ping that ends this view if the browser is gone
+	// (otherwise a vanished phone would leave its tmux client attached)
+	go func() {
+		t := time.NewTicker(heartbeat)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			wctx, wcancel := context.WithTimeout(ctx, 10*time.Second)
+			err := c.Write(wctx, websocket.MessageText, []byte(`{"type":"ping"}`))
+			if err == nil {
+				err = c.Ping(wctx)
+			}
+			wcancel()
+			if err != nil {
+				cancel()
 				return
 			}
 		}

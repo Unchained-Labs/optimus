@@ -361,3 +361,34 @@ func TestSessionsAutomatedAndSearch(t *testing.T) {
 		t.Errorf("content search: %v", hits)
 	}
 }
+
+func TestTerminalHeartbeat(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	old := heartbeat
+	heartbeat = 300 * time.Millisecond
+	defer func() { heartbeat = old }()
+	ts, s := setup(t)
+	c := client(t, ts, s)
+	id, err := mux.Spawn("hb", "shell", t.TempDir(), "", []string{"sh", "-c", "sleep 60"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, strings.Replace(ts.URL, "http", "ws", 1)+"/api/term/"+id, &websocket.DialOptions{HTTPClient: c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	for {
+		typ, data, err := ws.Read(ctx)
+		if err != nil {
+			t.Fatalf("no heartbeat: %v", err)
+		}
+		if typ == websocket.MessageText && string(data) == `{"type":"ping"}` {
+			return
+		}
+	}
+}
