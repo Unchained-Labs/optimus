@@ -107,6 +107,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/windows/{id}/merge", s.merge)
 	api.HandleFunc("POST /api/windows/{id}/discard", s.discard)
 	api.HandleFunc("POST /api/fanout", s.fanout)
+	api.HandleFunc("POST /api/outside/{pid}/takeover", s.takeover)
 	api.HandleFunc("GET /api/usage", s.usage)
 	api.HandleFunc("GET /api/phone", s.phone)
 	api.HandleFunc("GET /api/term/{id}", s.term)
@@ -211,6 +212,7 @@ type windowView struct {
 	Title     string    `json:"title,omitempty"`
 	Cost      float64   `json:"cost"`
 	Worktree  *treeView `json:"worktree,omitempty"`
+	External  bool      `json:"external,omitempty"` // runs in your own tmux
 }
 
 type treeView struct {
@@ -295,12 +297,14 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	out := s.app.Outside(idx)
+	ws = append(ws, app.LinkedWindows(out)...) // agents in your own tmux, shown where they are
 	windows := make([]windowView, 0, len(ws))
 	managed := map[string]bool{}
 	for _, x := range ws {
 		screen, _ := mux.Capture(x.ID, 30)
 		info := agentstate.Resolve(x, screen)
-		v := windowView{ID: x.ID, Index: x.Index, Name: x.Name, Agent: x.Agent, Cwd: x.Cwd, State: info.State, Message: info.Message, Since: info.Since, Activity: x.Activity, Created: x.Created, SessionID: x.SessionID}
+		v := windowView{ID: x.ID, Index: x.Index, Name: x.Name, Agent: x.Agent, Cwd: x.Cwd, State: info.State, Message: info.Message, Since: info.Since, Activity: x.Activity, Created: x.Created, SessionID: x.SessionID, External: x.External}
 		if t, ok := app.Tree(x); ok {
 			st, _ := t.Stats()
 			v.Worktree = &treeView{Path: t.Path, Repo: t.Repo, Branch: t.Branch, Stats: st, Label: st.String()}
@@ -311,11 +315,31 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		}
 		windows = append(windows, v)
 	}
-	outside := []providers.LiveSession{}
-	for _, l := range idx.Live {
-		if !managed[l.ID] {
-			outside = append(outside, l)
+	type outsideView struct {
+		PID       int    `json:"pid"`
+		Agent     string `json:"agent"`
+		Cwd       string `json:"cwd"`
+		Status    string `json:"status"`
+		Title     string `json:"title"`
+		SessionID string `json:"session_id"`
+		Where     string `json:"where"`
+		Linked    string `json:"linked,omitempty"` // window id when it's shown in the fleet
+		CanTake   bool   `json:"can_take_over"`
+		Why       string `json:"why,omitempty"` // why it can't be taken over
+	}
+	outside := []outsideView{}
+	for _, o := range out {
+		v := outsideView{PID: o.PID, Agent: o.Agent, Cwd: o.Cwd, Status: o.Status, Title: o.Title, SessionID: o.SessionID, Where: o.Where(), CanTake: true}
+		if o.Pane != nil {
+			v.Linked = o.Pane.ID()
 		}
+		switch {
+		case o.Container:
+			v.CanTake, v.Why = false, "runs in a container"
+		case o.SessionID == "":
+			v.CanTake, v.Why = false, "session unknown"
+		}
+		outside = append(outside, v)
 	}
 
 	agents := []agentView{}
@@ -568,6 +592,13 @@ func (s *Server) launch(w http.ResponseWriter, r *http.Request) {
 
 // window resolves the {id} path value to a live optimus window.
 func window(w http.ResponseWriter, r *http.Request) (mux.Window, bool) {
+	if id := r.PathValue("id"); mux.IsExternal(id) { // an agent in your own tmux
+		if win, err := mux.Resolve(id); err == nil {
+			return win, true
+		}
+		httpErr(w, http.StatusNotFound, "that pane is gone")
+		return mux.Window{}, false
+	}
 	ws, err := mux.List()
 	if err == nil {
 		for _, x := range ws {
@@ -752,6 +783,25 @@ func (s *Server) phone(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, resp)
+}
+
+func (s *Server) takeover(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Force bool `json:"force"`
+	}
+	_ = readJSON(r, &req)
+	idx, _ := s.index(true)
+	ag, ok := s.app.FindOutside(idx, r.PathValue("pid"))
+	if !ok {
+		httpErr(w, http.StatusNotFound, "no agent outside optimus with that pid")
+		return
+	}
+	id, err := s.app.TakeOver(idx, ag, req.Force)
+	if err != nil {
+		httpErr(w, http.StatusConflict, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"window": id})
 }
 
 type usageRow struct {

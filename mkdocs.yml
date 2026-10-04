@@ -99,6 +99,7 @@ nav:
       - Browser & phone: guide/web.md
       - Attention & notifications: guide/notifications.md
       - Parallel agents & worktrees: guide/worktrees.md
+      - Agents outside optimus: guide/outside.md
       - Sessions & handoff: guide/sessions.md
       - Costs & quota: guide/usage.md
       - Configuration: guide/configuration.md

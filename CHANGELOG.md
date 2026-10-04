@@ -5,11 +5,13 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Fixed
+- Agents launched by optimus from inside a Claude Code session inherited its session markers, so Claude Code treated them as child sessions and didn't save their transcripts.
 - Browser terminal could freeze or stay blank after a connection died silently (laptop sleep, phone in the background, a dropped network path). Terminals now send a heartbeat; the page reconnects after 40 s of silence, when it becomes visible again, or when the network comes back, and the server drops viewers whose browser is gone.
 - Late output from the previous agent could be painted into the terminal after switching agents.
 - After selecting an agent, keystrokes went to the page instead of the terminal (and could trigger shortcuts); the terminal now takes focus (desktop).
 
 ### Added
+- Agents running outside optimus: optimus finds Claude Code, Codex, opencode and other agents anywhere on the machine. Agents in your own tmux are **linked in place** (in the fleet, with live terminal, messages, answers and notifications); agents in a terminal tab can be **taken over**: stopped there and the same session resumed inside optimus (`optimus takeover`, `T`, browser button). Agents in containers are recognized as such.
 - A connection dot next to each agent's name in the browser: green live, yellow connecting, red lost (click to reconnect).
 
 ## [0.2.0] - 2026-10-03

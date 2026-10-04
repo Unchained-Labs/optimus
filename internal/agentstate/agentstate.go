@@ -99,7 +99,7 @@ func Resolve(w mux.Window, screen string) Info {
 		return Info{State: mux.StateExited, Source: "screen"}
 	}
 	r, ok := Read(w.Pane)
-	if !ok || r.At.Before(w.Created.Add(-time.Second)) {
+	if w.External || !ok || r.At.Before(w.Created.Add(-time.Second)) { // pane ids of other tmux servers mean nothing here
 		return Info{State: scr, Message: screenPrompt(scr, screen), Source: "screen"}
 	}
 	if !r.Full {

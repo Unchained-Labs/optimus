@@ -53,6 +53,9 @@ type Window struct {
 	Branch   string
 	// State is the last state the notifier recorded (@optimus_state)
 	State string
+	// External: the agent runs in your own tmux; optimus shows and drives it
+	// in place but doesn't own it.
+	External bool
 }
 
 func Available() bool {
@@ -104,6 +107,7 @@ func confText() string {
 set -g mouse on
 set -g history-limit 50000
 set -g escape-time 10
+set -g focus-events on
 set -g default-terminal "tmux-256color"
 set -ga terminal-overrides ",*256col*:Tc"
 # options newer than some distro tmux builds: -q ignores them where unknown
@@ -182,7 +186,7 @@ func Spawn(name, agent, dir, sessionID string, argv []string) (string, error) {
 		args = []string{"new-session", "-d", "-P", "-F", format, "-s", Session, "-n", name, "-c", dir, "-x", "220", "-y", "50"}
 	}
 	args = append(args, "--")
-	args = append(args, argv...)
+	args = append(args, independent(argv)...)
 	out, err := run(args...)
 	if err != nil {
 		return "", err
@@ -196,6 +200,25 @@ func Spawn(name, agent, dir, sessionID string, argv []string) (string, error) {
 	// keep the name we chose instead of tmux renaming it after the process
 	_, _ = run("set-option", "-w", "-t", id, "automatic-rename", "off")
 	return id, nil
+}
+
+// sessionMarkers identify the agent session optimus itself was started from
+// (e.g. running optimus from inside Claude Code). Agents optimus launches are
+// independent sessions: inheriting these would make Claude Code treat them as
+// child sessions and turn their transcripts off. User configuration
+// (CLAUDE_CONFIG_DIR, CLAUDE_CODE_USE_BEDROCK, …) is left alone.
+var sessionMarkers = []string{
+	"CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_BRIDGE_SESSION_ID",
+	"CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_SESSION_ATTENDED",
+	"CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_EXECPATH", "CLAUDE_PID", "CLAUDE_EFFORT", "AI_AGENT",
+}
+
+func independent(argv []string) []string {
+	out := []string{"env"}
+	for _, v := range sessionMarkers {
+		out = append(out, "-u", v)
+	}
+	return append(out, argv...)
 }
 
 var unsafe = regexp.MustCompile(`[^A-Za-z0-9._+-]+`)
@@ -258,6 +281,12 @@ func List() ([]Window, error) {
 
 // Resolve finds a window by id (@3), index (3), or name.
 func Resolve(q string) (Window, error) {
+	if IsExternal(q) {
+		if _, err := Capture(q, 1); err != nil {
+			return Window{}, fmt.Errorf("no such pane %q", q)
+		}
+		return Window{ID: q, Name: q, External: true}, nil
+	}
 	ws, err := List()
 	if err != nil {
 		return Window{}, err
@@ -272,7 +301,7 @@ func Resolve(q string) (Window, error) {
 
 // Capture returns the last n lines of a window's visible pane.
 func Capture(id string, lines int) (string, error) {
-	out, err := run("capture-pane", "-p", "-t", id, "-S", "-"+strconv.Itoa(lines))
+	out, err := on(id, "capture-pane", "-p", "-t", id, "-S", "-"+strconv.Itoa(lines))
 	ls := strings.Split(out, "\n")
 	for i, l := range ls {
 		ls[i] = strings.TrimRight(l, " ")
@@ -283,6 +312,9 @@ func Capture(id string, lines int) (string, error) {
 // Send pastes text into a window (bracketed paste, so multi-line prompts stay
 // one message) and presses Enter when submit is set.
 func Send(id, text string, submit bool) error {
+	if path, pane, ok := parseExt(id); ok {
+		return sendExt(path, pane, text, submit)
+	}
 	cmd := tmux("load-buffer", "-b", "optimus-send", "-")
 	cmd.Stdin = strings.NewReader(text)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -295,6 +327,24 @@ func Send(id, text string, submit bool) error {
 		// give the TUI a moment to process the paste before submitting
 		time.Sleep(300 * time.Millisecond)
 		_, err := run("send-keys", "-t", id, "Enter")
+		return err
+	}
+	return nil
+}
+
+func sendExt(path, pane, text string, submit bool) error {
+	cmd := exec.Command("tmux", "-S", path, "load-buffer", "-b", "optimus-send", "-")
+	cmd.Env = envWithoutTMUX()
+	cmd.Stdin = strings.NewReader(text)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux: %s", strings.TrimSpace(string(out)))
+	}
+	if _, err := runOn(path, "paste-buffer", "-d", "-p", "-b", "optimus-send", "-t", pane); err != nil {
+		return err
+	}
+	if submit {
+		time.Sleep(300 * time.Millisecond)
+		_, err := runOn(path, "send-keys", "-t", pane, "Enter")
 		return err
 	}
 	return nil
@@ -330,15 +380,24 @@ func Message(text string) {
 
 // SetWindowOption tags a window (e.g. @optimus_state for the status bar).
 func SetWindowOption(id, key, value string) {
+	if IsExternal(id) {
+		return // never write options on your own tmux
+	}
 	_, _ = run("set-option", "-w", "-t", id, key, value)
 }
 
 func Kill(id string) error {
+	if IsExternal(id) {
+		return errors.New("this agent runs in your own tmux; optimus doesn't stop it (take it over first)")
+	}
 	_, err := run("kill-window", "-t", id)
 	return err
 }
 
 func Rename(id, name string) error {
+	if IsExternal(id) {
+		return errors.New("this agent runs in your own tmux; rename it there")
+	}
 	_, err := run("rename-window", "-t", id, sanitize(name))
 	return err
 }
@@ -346,6 +405,9 @@ func Rename(id, name string) error {
 // AttachCmd returns a command that attaches the terminal to a window. The
 // caller runs it in the foreground; it returns when the user detaches.
 func AttachCmd(id string) *exec.Cmd {
+	if IsExternal(id) {
+		return extAttachCmd(id)
+	}
 	if UsePopup() {
 		return PopupCmd(id)
 	}
@@ -370,7 +432,7 @@ func Keys(id string, keys ...string) error {
 			return fmt.Errorf("key %q not allowed", k)
 		}
 	}
-	_, err := run(append([]string{"send-keys", "-t", id}, keys...)...)
+	_, err := on(id, append([]string{"send-keys", "-t", id}, keys...)...)
 	return err
 }
 
@@ -379,6 +441,9 @@ func Keys(id string, keys ...string) error {
 // its own current window), without a status bar, removed by the returned
 // cleanup func. The returned command attaches to it.
 func ViewCmd(windowID string) (*exec.Cmd, func(), error) {
+	if IsExternal(windowID) {
+		return extViewCmd(windowID)
+	}
 	var b [6]byte
 	_, _ = rand.Read(b[:])
 	view := fmt.Sprintf("view-%x", b)
@@ -447,6 +512,9 @@ func StopService(name string) error {
 // "[detached (from session …)]" line tmux prints, so it doesn't pile up in the
 // terminal once the dashboard exits.
 func AttachCmdQuiet(id string) *exec.Cmd {
+	if IsExternal(id) {
+		return extAttachCmd(id)
+	}
 	if UsePopup() {
 		return PopupCmd(id) // no "[detached]" line to clean up
 	}

@@ -57,6 +57,7 @@ Press ++i++ (or ++alt+n++ while attached) to jump to the next agent waiting for 
 | ++i++ | select the next agent waiting for you | ← | ← |
 | ++exclamation++ | answer its question without attaching | | |
 | ++shift+f++ | fan out a task to several agents in worktrees | ← | ← |
+| ++shift+t++ | take over an agent running outside optimus ([more](outside.md)) | | |
 | ++shift+d++ / ++shift+m++ / ++shift+x++ | worktree agent: diff / merge / discard | | |
 | ++n++ | start an agent: pick which and where | ← | ← |
 | ++shift+n++ | start the default agent here | in the session's folder | in this project |

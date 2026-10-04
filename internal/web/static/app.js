@@ -119,14 +119,21 @@ function renderFleet() {
   $("#windows").innerHTML = wins.map((w) => `
     <button class="win ${w.id === S.selected ? "on" : ""}" data-id="${esc(w.id)}">
       <div class="l1"><strong>${esc(w.name)}</strong>${stateBadge(w.state)}</div>
-      <div class="l2">${agentChip(w.agent)} ${esc(short(w.worktree ? w.worktree.repo : w.cwd))} · ${ago(w.activity)}${w.cost ? ` · <span class="${st.session_budget && w.cost >= st.session_budget ? "over" : "cost"}">${money(w.cost)}</span>` : ""}</div>
+      <div class="l2">${agentChip(w.agent)}${w.external ? ` <span class="chip ext" title="Runs in your own tmux; optimus shows and drives it where it is">↗ your tmux</span>` : ""} ${esc(short(w.worktree ? w.worktree.repo : w.cwd))} · ${ago(w.activity)}${w.cost ? ` · <span class="${st.session_budget && w.cost >= st.session_budget ? "over" : "cost"}">${money(w.cost)}</span>` : ""}</div>
       ${w.worktree ? `<div class="wt">⎇ ${esc(w.worktree.label)}</div>` : ""}
       ${w.state === "input" && w.message ? `<div class="ask">◆ ${esc(w.message)}</div>` : w.title ? `<div class="l3">${esc(w.title)}</div>` : ""}
     </button>`).join("");
   $$("#windows .win").forEach((b) => b.addEventListener("click", () => select(b.dataset.id)));
 
-  $("#outside-wrap").hidden = !st.outside.length;
-  $("#outside").innerHTML = st.outside.map((o) => `<div class="o">${agentChip(o.Agent)} ${esc(o.Status)} · ${esc(short(o.Cwd))}</div>`).join("");
+  const unlinked = st.outside.filter((o) => !o.linked);
+  $("#outside-wrap").hidden = !unlinked.length;
+  $("#outside").innerHTML = unlinked.map((o) => `
+    <div class="o">
+      <div>${agentChip(o.agent)} ${esc(o.status || "")} · ${esc(short(o.cwd))}</div>
+      <div class="dim">${esc(o.title || "")}${o.title ? " · " : ""}in ${esc(o.where)}</div>
+      ${o.can_take_over ? `<button class="take" data-pid="${o.pid}" data-busy="${o.status === "busy" ? 1 : ""}" title="Stop it there and continue the same session inside optimus">Take over</button>` : `<span class="dim">${esc(o.why)}</span>`}
+    </div>`).join("");
+  $$("#outside .take").forEach((b) => b.addEventListener("click", () => takeOver(+b.dataset.pid, !!b.dataset.busy)));
 
   const def = st.default_agent;
   $("#quick").innerHTML = st.projects.filter((p) => p.exists).slice(0, 8).map((p) =>
@@ -165,6 +172,8 @@ function renderFleet() {
     $("#pane-cwd").textContent = short(w.cwd);
     $("#pane-state").outerHTML = stateBadge(w.state).replace('class="state', 'id="pane-state" class="state');
     for (const b of ["#act-diff", "#act-merge", "#act-discard"]) $(b).hidden = !w.worktree;
+    $("#act-kill").hidden = $("#act-rename").hidden = !!w.external;
+    $("#act-takeover").hidden = !w.external;
     $("#act-transcript").disabled = !w.session_id;
     $("#act-handoff").disabled = !w.session_id;
     if (term.attached !== w.id) connect(w.id);
@@ -359,6 +368,21 @@ $("#act-rename").addEventListener("click", () => {
   const name = w && prompt("Rename window", w.name);
   if (name) act(() => api(`/api/windows/${encodeURIComponent(w.id)}/rename`, { method: "POST", body: { name } }));
 });
+async function takeOver(pid, busy) {
+  const o = S.state.outside.find((x) => x.pid === pid);
+  const what = o ? `${o.agent} in ${short(o.cwd)}${o.title ? ` (“${o.title}”)` : ""}` : `pid ${pid}`;
+  if (!confirm(`Take over ${what}?\n\nIt will be stopped where it runs now and the same session continues inside optimus.`)) return;
+  let force = false;
+  if (busy && !(force = confirm("It's in the middle of a turn. Stopping it now cuts that turn short. Stop it anyway?"))) return;
+  const r = await act(() => api(`/api/outside/${pid}/takeover`, { method: "POST", body: { force } }), "Now running in optimus");
+  if (r?.window) { S.selected = r.window; setView("fleet"); }
+}
+$("#act-takeover").addEventListener("click", () => {
+  const w = selectedWin();
+  const o = w && S.state.outside.find((x) => x.linked === w.id);
+  if (o) takeOver(o.pid, o.status === "busy");
+});
+
 const selectedWin = () => S.state.windows.find((x) => x.id === S.selected);
 $("#act-diff").addEventListener("click", () => openDiff(selectedWin()));
 $("#act-merge").addEventListener("click", () => mergeWin(selectedWin()));

@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +24,10 @@ func TestFleetSummary(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", dir+"/home/.claude")
 	sock := fmt.Sprintf("optimus-fleet-%d", time.Now().UnixNano())
 	mux.Socket = sock
-	t.Cleanup(func() { exec.Command("tmux", "-L", sock, "kill-server").Run() })
+	t.Cleanup(func() {
+		exec.Command("tmux", "-L", sock, "kill-server").Run()
+		os.Remove(filepath.Join(tmuxDir(), sock)) // tmux can leave the socket file behind
+	})
 
 	a, b := mustSpawn(t, "one"), mustSpawn(t, "two")
 	_ = a
@@ -45,4 +50,11 @@ func mustSpawn(t *testing.T, name string) string {
 		t.Fatal(err)
 	}
 	return id
+}
+
+func tmuxDir() string {
+	if d := os.Getenv("TMUX_TMPDIR"); d != "" {
+		return filepath.Join(d, fmt.Sprintf("tmux-%d", os.Getuid()))
+	}
+	return fmt.Sprintf("/tmp/tmux-%d", os.Getuid())
 }

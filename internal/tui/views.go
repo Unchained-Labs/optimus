@@ -220,7 +220,11 @@ func (m *Model) viewAgents() string {
 		if m.marked[w.ID] {
 			mark = sKey.Render("▸ ")
 		}
-		line1 := mark + sDim.Render(fmt.Sprintf("%d ", w.Index)) + sBold.Render(cell(w.Name, leftW-18)) + " " + stateBadge(m.states[w.ID])
+		num := fmt.Sprintf("%d ", w.Index)
+		if w.External {
+			num = "↗ "
+		}
+		line1 := mark + sDim.Render(num) + sBold.Render(cell(w.Name, leftW-18)) + " " + stateBadge(m.states[w.ID])
 		cost := ""
 		if s := m.sessionForWindow(w); s != nil && s.Cost > 0 {
 			st := sMoney
@@ -251,14 +255,18 @@ func (m *Model) viewAgents() string {
 		}
 	}
 	var ext []string
-	for _, l := range m.idx.Live {
-		if managed[l.ID] {
-			continue
+	for _, o := range m.outside {
+		if o.Pane != nil {
+			continue // linked: listed above with the fleet
 		}
-		ext = append(ext, cell("  "+agentStyle(l.Agent).Render(l.Agent)+" "+sDim.Render(l.Status+" · "+shortHome(l.Cwd)), leftW))
+		hint := sDim.Render(" · ") + sKey.Render("T")
+		if o.Container || o.SessionID == "" {
+			hint = ""
+		}
+		ext = append(ext, cell("  "+agentStyle(o.Agent).Render(o.Agent)+" "+sDim.Render(o.Status+" · "+shortHome(o.Cwd)+" · "+o.Where())+hint, leftW))
 	}
 	if len(ext) > 0 {
-		rows = append(rows, "", sHead.Render("  OUTSIDE OPTIMUS"))
+		rows = append(rows, "", sHead.Render("  OUTSIDE OPTIMUS")+sDim.Render("  (T takes one over)"))
 		rows = append(rows, ext...)
 	}
 	if len(m.suggest) > 0 {
@@ -292,12 +300,12 @@ func (m *Model) viewAgentsEmpty() string {
 	b.WriteString("\n  " + sBold.Render("No agents running in the optimus multiplexer.") + "\n\n")
 	b.WriteString("  Press " + sKey.Render("n") + " to start one (claude, codex, opencode, …). It runs in a private tmux\n")
 	b.WriteString("  server, so it keeps going when you quit optimus. Attach with " + sKey.Render("enter") + ", come back with " + sKey.Render("Alt-q") + ".\n\n")
-	if len(m.idx.Live) > 0 {
+	if len(m.outside) > 0 {
 		b.WriteString("  " + sHead.Render("RUNNING OUTSIDE OPTIMUS") + "\n")
-		for _, l := range m.idx.Live {
-			fmt.Fprintf(&b, "  %s %s %s\n", agentStyle(l.Agent).Render(cell(l.Agent, 8)), cell(l.Status, 6), sDim.Render(shortHome(l.Cwd)))
+		for _, o := range m.outside {
+			fmt.Fprintf(&b, "  %s %s %s\n", agentStyle(o.Agent).Render(cell(o.Agent, 8)), cell(o.Status, 6), sDim.Render(shortHome(o.Cwd)+" · "+o.Where()))
 		}
-		b.WriteString("\n  " + sDim.Render("Those can't be attached from here, but you can hand their context to a new agent from the Sessions tab.") + "\n")
+		b.WriteString("\n  " + sDim.Render("Press ") + sKey.Render("T") + sDim.Render(" to take one over: it stops there and the same session continues here.") + "\n")
 	}
 	return b.String()
 }
@@ -584,7 +592,7 @@ func (m *Model) viewHelp() string {
 		keys  [][2]string
 	}{
 		{"Everywhere", [][2]string{{"ctrl+k  :", "command palette: agents, sessions, projects, actions"}, {"1-4 / tab", "switch view"}, {"j k ↑ ↓", "move"}, {"n", "start an agent (pick which and where)"}, {"N", "start your default agent in this project, now"}, {"w", "open the web dashboard (phone/browser remote)"}, {"R", "rescan sessions"}, {"q", "quit (agents keep running)"}}},
-		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"!", "answer it without attaching: shows its question, forwards 1/2/3, y/n, enter"}, {"F", "fan out: same task to several agents, each in its own worktree"}, {"C", "quota running out: continue the session in another agent"}, {"D / M / X", "worktree agents: review diff / merge into the repo / discard"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
+		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"!", "answer it without attaching: shows its question, forwards 1/2/3, y/n, enter"}, {"F", "fan out: same task to several agents, each in its own worktree"}, {"T", "take over an agent running outside optimus (↗ = in your own tmux, shown in place)"}, {"C", "quota running out: continue the session in another agent"}, {"D / M / X", "worktree agents: review diff / merge into the repo / discard"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
 		{"Sessions", [][2]string{{"enter", "read transcript"}, {"r", "resume in the multiplexer"}, {"h", "hand off context to a new agent, a running one, clipboard or file"}, {"H", "same, condensed by an agent first"}, {"y", "copy handoff to clipboard"}, {"/ a p esc", "filter text / agent / project / clear"}, {"S", "search inside transcripts"}, {"z", "show / hide automated sessions (claude -p, cron jobs)"}}},
 		{"Projects", [][2]string{{"enter", "sessions of this project"}, {"c", "start an agent here"}}},
 	}

@@ -240,3 +240,8 @@ button.link { width: 10px; height: 10px; min-width: 10px; padding: 0; border-rad
 button.link.live { background: var(--green); }
 button.link.connecting { background: var(--yellow); animation: pulse 1s infinite; }
 button.link.lost { background: var(--red); cursor: pointer; }
+
+.chip.ext { color: var(--teal); }
+.outside .o { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; }
+.outside .o:hover { background: var(--surface); }
+.outside .o .take { justify-self: start; margin-top: 4px; padding: 3px 10px; font-size: 12px; }
