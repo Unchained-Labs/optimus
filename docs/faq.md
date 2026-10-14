@@ -10,7 +10,13 @@
     On a Claude or ChatGPT plan you aren't billed per token. optimus shows what the same traffic would cost at API list prices, a measure of how much you're getting out of the plan. Override prices under `pricing` in the [config](guide/configuration.md).
 
 ??? question "Can I use it with agents I started outside optimus?"
-    Yes. Their history, cost and transcripts appear like any other session, running Claude sessions are listed under *Outside optimus*, and you can hand their context to an agent inside optimus. Only agents started inside optimus can be attached to and driven.
+    Yes. Their history, cost and transcripts appear like any other session. Agents running in your own tmux are linked in place (state, live terminal, messages, notifications); agents in a plain terminal tab can be taken over, which stops them there and resumes the same session inside optimus. See [Agents outside optimus](guide/outside.md).
+
+??? question "All my agents disappeared at once. Why?"
+    Usually the out-of-memory killer. It ends a whole cgroup, and agents used to share one with the tmux server. On Linux with a systemd user session, optimus now starts each agent in its own `optimus-agent-*.scope`, so an OOM kill ends only the agent that grew too big. The kernel log (`journalctl -k`) records each kill. (`OPTIMUS_NO_SCOPE=1` turns scopes off.)
+
+??? question "How do I see the options of one command?"
+    `optimus <command> -h` (or `optimus help <command>`) prints its usage and flags; `optimus help` lists every command.
 
 ??? question "Is it safe to open the web dashboard from my phone?"
     Over a private network, yes. Use Tailscale, WireGuard or an SSH tunnel and keep the token private. Anyone with the token can type into your agents, so never expose the port to the internet. See [Security](reference/security.md).

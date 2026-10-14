@@ -150,7 +150,7 @@ func cmdAnswer(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: optimus answer <window> <key>...   (keys: 1 2 3 y n Enter Escape Tab Up Down C-c)")
 	}
-	w, err := mux.Resolve(args[0])
+	w, err := resolveWindow(args[0], "answer <window> <key>...")
 	if err != nil {
 		return err
 	}

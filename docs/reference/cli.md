@@ -1,6 +1,6 @@
 # CLI reference
 
-`optimus` with no arguments opens the terminal dashboard. Everything else is a subcommand. This page is generated from the binary's own help on every docs build.
+`optimus` with no arguments opens the terminal dashboard. Everything else is a subcommand. This page is generated from the binary's own help on every docs build. `optimus <command> -h` (or `optimus help <command>`) shows one command and its flags.
 
 ```text
 --8<-- "reference/cli-usage.txt"
@@ -21,7 +21,7 @@ optimus gemini -d                   # start detached
 
 `--since` accepts `7d`, `12h`, `2w`, `3m`, `today`, `week`, `month`, `all` or a date (`2026-09-01`).
 Session arguments accept a full id, a unique prefix (`3f2a`) or `last`.
-Window arguments accept the tmux id (`@3`), the index (`3`) or the name.
+Window arguments accept the number shown by `optimus ps` (`3`), the name, or the tmux id (`@3`).
 
 ## JSON output
 
