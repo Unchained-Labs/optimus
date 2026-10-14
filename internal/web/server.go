@@ -110,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/windows/{id}/diff", s.diff)
 	api.HandleFunc("POST /api/windows/{id}/merge", s.merge)
 	api.HandleFunc("POST /api/windows/{id}/discard", s.discard)
+	api.HandleFunc("POST /api/windows/{id}/pr", s.pullRequest)
 	api.HandleFunc("POST /api/fanout", s.fanout)
 	api.HandleFunc("POST /api/outside/{pid}/takeover", s.takeover)
 	api.HandleFunc("GET /api/usage", s.usage)
@@ -764,11 +765,32 @@ func (s *Server) merge(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := t.Merge(true, "optimus: work from "+win.Name+" ("+win.Agent+")"); err != nil {
+	if err := t.Merge(true, app.WorkMessage(win)); err != nil {
 		httpErr(w, http.StatusConflict, err.Error())
 		return
 	}
 	writeJSON(w, map[string]string{"merged": t.Branch, "into": t.Repo})
+}
+
+func (s *Server) pullRequest(w http.ResponseWriter, r *http.Request) {
+	win, t, ok := treeFor(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Title string `json:"title"`
+		Draft bool   `json:"draft"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		httpErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	pr, err := t.PullRequest(app.WorkMessage(win), worktree.PROptions{Title: strings.TrimSpace(req.Title), Draft: req.Draft})
+	if err != nil {
+		httpErr(w, http.StatusConflict, err.Error())
+		return
+	}
+	writeJSON(w, pr)
 }
 
 func (s *Server) discard(w http.ResponseWriter, r *http.Request) {
