@@ -127,8 +127,12 @@
     <label class="lbl">Agent</label>
     <div class="agent-pick" id="new-agents"></div>
     <label class="lbl" for="new-dir">Project</label>
-    <input id="new-dir" list="new-dirs" placeholder="~/dev/my-project" required>
-    <datalist id="new-dirs"></datalist>
+    <div class="dirpick">
+      <input id="new-dir" placeholder="Search projects, or type a path: ~/dev/…" required autocomplete="off" spellcheck="false"
+        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="new-dirs">
+      <div id="new-dirs" class="dir-list" role="listbox" hidden></div>
+    </div>
+    <div class="dim dir-hint">↑↓ choose · Enter pick · Tab open folder · type <code>~/</code> or <code>/</code> to browse</div>
     <div class="recent" id="new-recent"></div>
     <label class="lbl" for="new-prompt">First message <span class="dim">(optional)</span></label>
     <textarea id="new-prompt" rows="3" placeholder="What should it work on?"></textarea>

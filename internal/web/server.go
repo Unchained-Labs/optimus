@@ -21,6 +21,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/config"
+	"github.com/Unchained-Labs/optimus/internal/dirs"
 	"github.com/Unchained-Labs/optimus/internal/handoff"
 	"github.com/Unchained-Labs/optimus/internal/index"
 	"github.com/Unchained-Labs/optimus/internal/model"
@@ -45,6 +46,8 @@ type Server struct {
 	// PhoneURLs lists URLs reachable from other devices (set by the CLI).
 	PhoneURLs func(addr string) []string
 
+	dirs *dirs.Index // folders under home, for the new-session picker
+
 	mu       sync.Mutex
 	idx      *index.Index
 	limits   []ratelimits.Window
@@ -57,7 +60,8 @@ func New(a *app.App) (*Server, error) {
 		return nil, err
 	}
 	mux.SweepViews()
-	return &Server{app: a, token: tok}, nil
+	home, _ := os.UserHomeDir()
+	return &Server{app: a, token: tok, dirs: dirs.NewIndex(home)}, nil
 }
 
 // index returns the session index, rescanning when stale or forced.
@@ -109,6 +113,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/fanout", s.fanout)
 	api.HandleFunc("POST /api/outside/{pid}/takeover", s.takeover)
 	api.HandleFunc("GET /api/usage", s.usage)
+	api.HandleFunc("GET /api/dirs", s.dirList)
 	api.HandleFunc("GET /api/phone", s.phone)
 	api.HandleFunc("GET /api/term/{id}", s.term)
 	m.Handle("/api/", s.auth(api))
@@ -459,6 +464,37 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, map[string]any{"sessions": out, "total_cost": total, "automated_hidden": hidden})
+}
+
+// dirList feeds the new-session folder picker. A query typed as a path
+// (/…, ~…, ./…) completes like a shell; anything else searches every project
+// under home and every folder with agent history. Only folder names are
+// returned — this dashboard already runs commands as the user, so listing
+// directories adds no capability.
+func (s *Server) dirList(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	home, _ := os.UserHomeDir()
+	if dirs.IsPath(q) {
+		if strings.HasPrefix(q, "./") {
+			q = "~/" + q[2:]
+		}
+		out := dirs.Complete(q, home, 60)
+		if out == nil {
+			out = []dirs.Dir{}
+		}
+		writeJSON(w, map[string]any{"mode": "complete", "dirs": out})
+		return
+	}
+	idx, _ := s.index(false)
+	var known []dirs.Known
+	for _, p := range usage.Projects(idx.Sessions, s.app.Prices, time.Now()) {
+		known = append(known, dirs.Known{Path: p.Cwd, Sessions: p.Sessions, Last: p.Last})
+	}
+	out := dirs.Search(q, s.dirs.Dirs(1500*time.Millisecond), known, home, 40)
+	if out == nil {
+		out = []dirs.Dir{}
+	}
+	writeJSON(w, map[string]any{"mode": "search", "dirs": out})
 }
 
 func (s *Server) session(w http.ResponseWriter, r *http.Request) *model.Session {
