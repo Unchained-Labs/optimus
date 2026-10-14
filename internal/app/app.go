@@ -16,6 +16,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/index"
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/outside"
 	"github.com/Unchained-Labs/optimus/internal/pricing"
 	"github.com/Unchained-Labs/optimus/internal/providers"
 	"github.com/Unchained-Labs/optimus/internal/worktree"
@@ -186,6 +187,13 @@ func (a *App) Resume(s *model.Session) (string, error) {
 			if w.SessionID == s.ID && !w.Dead {
 				return w.ID, nil
 			}
+		}
+	}
+	// two processes appending to one transcript corrupt it: a session that
+	// runs in a terminal of its own is taken over, not resumed beside it
+	for _, ag := range outside.Scan(nil) {
+		if ag.SessionID == s.ID {
+			return "", fmt.Errorf("session %s is already running in %s (pid %d); take it over instead of resuming a second copy", s.ShortID(), ag.Where(), ag.PID)
 		}
 	}
 	p, bin, extra, err := a.provider(s.Agent)

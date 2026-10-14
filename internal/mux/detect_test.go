@@ -37,3 +37,19 @@ func TestIndependent(t *testing.T) {
 		t.Error("user configuration must pass through")
 	}
 }
+
+func TestScoped(t *testing.T) {
+	defer func(f func() bool) { scopesAvailable = f }(scopesAvailable)
+	scopesAvailable = func() bool { return false }
+	if got := scoped([]string{"claude"}); len(got) != 1 || got[0] != "claude" {
+		t.Fatalf("no systemd: got %v", got)
+	}
+	scopesAvailable = func() bool { return true }
+	got := scoped([]string{"claude", "--resume", "x"})
+	if got[0] != "systemd-run" || got[len(got)-4] != "--" || got[len(got)-3] != "claude" {
+		t.Fatalf("got %v", got)
+	}
+	if a, b := scoped([]string{"x"}), scoped([]string{"x"}); strings.Join(a, " ") == strings.Join(b, " ") {
+		t.Error("each agent needs its own unit name")
+	}
+}
