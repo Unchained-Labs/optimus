@@ -20,7 +20,9 @@
 
 ## How sessions map to windows
 
-Claude sessions started by optimus get a pre-assigned `--session-id`, so their window, transcript and cost are linked exactly. For other agents, optimus matches the newest session of that agent in the window's folder that was active after the window opened.
+Claude sessions started by optimus get a pre-assigned `--session-id`, so their window, transcript and cost are linked exactly. After `/clear`, `/resume` or a fork inside the window, the hooks retag the window with the session now running. Until the first message the transcript doesn't exist yet, so the window shows no cost or transcript rather than borrowing another session's.
+
+For other agents, optimus matches the newest session of that agent in the window's folder that was active after the window opened.
 
 ## Adding an agent
 

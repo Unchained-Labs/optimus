@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 - New-session folder picker that finds every project under your home folder, not only folders that already have sessions: git repos and folders with a project manifest (crawled in the background, cached, skipping dependencies and build output), ranked by name match and agent history. Type `~/` or `/` to browse like a shell; ↑↓ to choose, Enter to pick, Tab or › to open a folder. `GET /api/dirs?q=`.
+- The terminal dashboard's new-session folder picker (`n`) uses the same search: every project under home, not only folders with past sessions, ranked the same way; `~/`, `/` or `./` browse, Tab opens the highlighted folder, and the typed folder itself is the first row.
+- `optimus <command> -h` and `optimus help <command>` show that command's usage and flags. Before, `-h` printed nothing, and a mistyped flag printed only the error.
 
 ### Fixed
 - Every agent ran in the cgroup of whatever started the tmux server, so the out-of-memory killer (which takes whole cgroups) ended all sessions at once and they came back when the supervisor restarted — sessions "appearing and disappearing". On Linux with a reachable systemd user manager, each agent now runs in its own `optimus-agent-*.scope`, so an OOM kill ends one session and restarting the UI ends none. `OPTIMUS_NO_SCOPE=1` turns it off.
@@ -13,6 +15,11 @@ All notable changes to this project are documented here. The format follows [Kee
 - After `/clear`, `/resume` or a fork inside a window, the fleet kept showing the old session. The Claude hook now retags the window with the session actually running.
 - An agent outside optimus that had just started (still at Claude's folder-trust prompt, before Claude writes `~/.claude/sessions/<pid>.json`) showed "session unknown". A resumed or pre-assigned session is now recognised from its command line (`--resume`, `-r`, `--session-id`, `codex resume`), and when a session has to be guessed, one another process is already writing is never assigned twice.
 - Resuming a session that is already running in another terminal started a second process on the same transcript; it now refuses and points to take-over.
+- Resuming such a session from the terminal dashboard now offers to take it over in place of an error, and the CLI error names the command (`optimus takeover <pid>`).
+- The terminal dashboard's key hints were cut off on screens narrower than ~200 columns, hiding `? help` and `q quit`; those now always show and the other hints are ordered by use.
+- `optimus new`, `resume`, `takeover`, `handoff --to` and the agent shortcuts reported tmux's window id (`@3`) while `optimus ps` and the dashboard show window numbers; they now print the number and name, and how to attach.
+- `optimus kill` and `peek` without a window said `no optimus window ""`; they now show their usage, and every window command given an unknown window points to `optimus ps`.
+- Docs: per-agent systemd scopes and `OPTIMUS_NO_SCOPE`, the folder search, the resume guard, windows following `/clear` and `/resume`, the dashboard keys missing from the key table, and agents outside optimus (the FAQ still said they couldn't be driven).
 
 ## [0.3.0] - 2026-10-04
 

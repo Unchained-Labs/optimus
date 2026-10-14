@@ -13,7 +13,11 @@ The web dashboard drives the same agents as the terminal UI:
 - **Sessions:** search, filter by agent or project, read transcripts, **Resume** and **Handoff**.
 - **Usage:** spend, quota, the current block, budgets, a 30-day chart, and breakdowns by model, agent and project.
 - **Command palette** (++ctrl+k++ or **⌘K**): jump to any agent, session or project, or run any action.
-- **＋ New session** (or ++n++): agent, project, first message, name, and Claude Remote Control. **Quick start** in the sidebar starts your default agent in a recent project with one click.
+- **＋ New session** (or ++n++): agent, folder, first message, name, and Claude Remote Control. **Quick start** in the sidebar starts your default agent in a recent project with one click.
+
+### Choosing the folder
+
+The folder field searches every project under your home folder (git repositories and folders with a project manifest such as `go.mod` or `package.json`), not only those that already have sessions. Folders you've used before rank first. Type `~/` or `/` to browse like a shell: ++up++ / ++down++ choose, ++enter++ picks, ++tab++ or **›** opens a folder. The terminal dashboard's ++n++ uses the same search.
 
 <div class="op-row" markdown>
 ![New session](../images/web-new-session.png)

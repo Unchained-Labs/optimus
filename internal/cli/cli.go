@@ -3,6 +3,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -36,7 +37,8 @@ Usage:
   optimus                         open the dashboard (TUI)
 
  Multiplexer
-  optimus claude|codex|… [dir]    start that agent here and attach  (-p PROMPT, -d to stay detached)
+  optimus claude|codex|… [dir]    start that agent here and attach  (-p PROMPT, -d to stay detached,
+                                  -w own git worktree, --name N)
   optimus new [agent] [dir]       start an agent (default: config default_agent)
         --name N --prompt P --attach --worktree (own git worktree + branch)
   optimus fanout "task"           same task to several agents, each in its own worktree (--agents claude,codex)
@@ -83,7 +85,65 @@ Usage:
   optimus config statusline --install   let Claude Code report quota to optimus
   optimus reindex                 drop the parse cache and rescan
   optimus version
+  optimus help [command]          this list, or one command's flags (also: optimus <command> -h)
 `
+
+// aliases maps the alternative command names to the one Usage documents.
+var aliases = map[string]string{
+	"sessions": "ls", "list": "ls", "cat": "show", "grep": "search", "cost": "usage", "costs": "usage",
+	"remaining": "limits", "quota": "limits", "spawn": "new", "run": "new", "a": "attach",
+	"transfer": "handoff", "cp": "handoff", "worktree": "wt", "fan-out": "fanout",
+	"adopt": "takeover", "grab": "takeover", "serve": "web", "ui-web": "web", "doctor": "agents",
+}
+
+// commandHelp is the part of Usage about one command: its line and the
+// continuation lines under it. Empty when the command isn't documented.
+func commandHelp(cmd string) string {
+	if c, ok := aliases[cmd]; ok {
+		cmd = c
+	}
+	if cmd == "" {
+		return ""
+	}
+	cmd, _, _ = strings.Cut(cmd, " ") // "wt merge" is documented under wt
+	head := func(t string) bool { return t == "optimus "+cmd || strings.HasPrefix(t, "optimus "+cmd+" ") }
+	if providers.Get(cmd) != nil { // agent shortcuts share one entry
+		head = func(t string) bool { return strings.HasPrefix(t, "optimus claude|") }
+	}
+	var out []string
+	in := false
+	for _, l := range strings.Split(Usage, "\n") {
+		t := strings.TrimSpace(l)
+		switch {
+		case head(t):
+			out, in = append(out, l), true
+		case in && strings.HasPrefix(l, "        ") && !strings.HasPrefix(t, "optimus "):
+			out = append(out, l)
+		default:
+			in = false
+		}
+	}
+	if len(out) == 0 {
+		return ""
+	}
+	return "Usage:\n" + strings.Join(out, "\n") + "\n"
+}
+
+// parsesFlags reports whether a command reads its arguments with parse,
+// which answers -h with the command's flags as well.
+func parsesFlags(cmd string) bool {
+	if c, ok := aliases[cmd]; ok {
+		cmd = c
+	}
+	switch cmd {
+	case "ls", "show", "search", "usage", "blocks", "projects", "takeover", "new", "resume", "send", "peek", "handoff", "web", "fleet", "fanout", "next":
+		return true
+	}
+	return providers.Get(cmd) != nil
+}
+
+// isHelp reports whether arg asks for help.
+func isHelp(arg string) bool { return arg == "-h" || arg == "--help" || arg == "-help" }
 
 func Run(args []string) int {
 	a := app.New()
@@ -91,6 +151,12 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "optimus: config %s: %v (using defaults)\n", config.Path(), a.CfgErr)
 	}
 	cmd, rest := args[0], args[1:]
+	if len(rest) > 0 && isHelp(rest[0]) && !parsesFlags(cmd) {
+		if h := commandHelp(cmd); h != "" {
+			fmt.Print(h)
+			return 0
+		}
+	}
 	var err error
 	switch cmd {
 	case "ls", "sessions", "list":
@@ -156,6 +222,10 @@ func Run(args []string) int {
 	case "version", "--version", "-v":
 		fmt.Println("optimus", Version)
 	case "help", "--help", "-h":
+		if h := commandHelp(first(rest)); h != "" {
+			fmt.Print(h)
+			break
+		}
 		fmt.Print(Usage)
 	default:
 		if providers.Get(cmd) != nil {
@@ -172,13 +242,19 @@ func Run(args []string) int {
 	return 0
 }
 
-// parse lets flags appear before or after positional args.
+// parse lets flags appear before or after positional args. -h prints the
+// command's help and flags; a bad flag prints them too, after the error.
 func parse(fs *flag.FlagSet, args []string) []string {
 	fs.SetOutput(io.Discard)
+	fs.Init(fs.Name(), flag.ContinueOnError)
 	var pos []string
 	for {
 		if err := fs.Parse(args); err != nil {
-			fmt.Fprintln(os.Stderr, "optimus:", err)
+			if errors.Is(err, flag.ErrHelp) {
+				fmt.Print(flagHelp(fs))
+				os.Exit(0)
+			}
+			fmt.Fprintf(os.Stderr, "optimus %s: %v\n\n%s", fs.Name(), err, flagHelp(fs))
 			os.Exit(2)
 		}
 		if fs.NArg() == 0 {
@@ -187,6 +263,17 @@ func parse(fs *flag.FlagSet, args []string) []string {
 		pos = append(pos, fs.Arg(0))
 		args = fs.Args()[1:]
 	}
+}
+
+// flagHelp is a command's Usage entry followed by its flags.
+func flagHelp(fs *flag.FlagSet) string {
+	var b strings.Builder
+	b.WriteString(commandHelp(fs.Name()))
+	b.WriteString("\nFlags:\n")
+	fs.SetOutput(&b)
+	fs.PrintDefaults()
+	fs.SetOutput(io.Discard)
+	return b.String()
 }
 
 func table() *tabwriter.Writer { return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0) }
@@ -597,7 +684,10 @@ func cmdTakeover(a *app.App, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s %s now runs in optimus (window %s); its old terminal has exited\n", ag.Agent, model.Truncate(ag.Title, 50), id)
+	fmt.Printf("%s %s now runs in optimus; its old terminal has exited\n", ag.Agent, model.Truncate(ag.Title, 50))
+	if !*attach {
+		started("it runs", id)
+	}
 	if *attach {
 		return mux.AttachCmd(id).Run()
 	}
@@ -623,7 +713,9 @@ func cmdNew(a *app.App, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("started %s in window %s\n", pos[0], id)
+	if !*attach {
+		started("started "+pos[0], id)
+	}
 	if *attach {
 		return mux.AttachCmd(id).Run()
 	}
@@ -658,11 +750,36 @@ func cmdResume(a *app.App, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("resumed %s %s in window %s\n", s.Agent, s.ShortID(), id)
+	if !*attach {
+		started("resumed "+s.Agent+" "+s.ShortID(), id)
+	}
 	if *attach {
 		return mux.AttachCmd(id).Run()
 	}
 	return nil
+}
+
+// resolveWindow finds a window by id, index or name, saying how to call the
+// command and where to find window numbers when there's nothing to resolve.
+func resolveWindow(q, usage string) (mux.Window, error) {
+	if q == "" {
+		return mux.Window{}, fmt.Errorf("usage: optimus %s   (window: the number, name or @id from `optimus ps`)", usage)
+	}
+	w, err := mux.Resolve(q)
+	if err != nil {
+		return w, fmt.Errorf("%v — `optimus ps` lists them", err)
+	}
+	return w, nil
+}
+
+// started reports a new window the way `optimus ps` and the dashboard show
+// it (its number and name, not tmux's @id) and how to reach it.
+func started(what, id string) {
+	label, n := id, id
+	if w, err := mux.Resolve(id); err == nil && !w.External {
+		label, n = fmt.Sprintf("%d (%s)", w.Index, w.Name), strconv.Itoa(w.Index)
+	}
+	fmt.Printf("%s in window %s — attach with `optimus attach %s` (Alt-q comes back)\n", what, label, n)
 }
 
 func cmdAttach(args []string) error {
@@ -671,7 +788,7 @@ func cmdAttach(args []string) error {
 	}
 	target := ""
 	if len(args) > 0 {
-		w, err := mux.Resolve(args[0])
+		w, err := resolveWindow(args[0], "attach [window]")
 		if err != nil {
 			return err
 		}
@@ -709,7 +826,7 @@ func cmdSend(args []string) error {
 			}
 		}
 	} else {
-		w, err := mux.Resolve(pos[0])
+		w, err := resolveWindow(pos[0], "send <window|all> <text>")
 		if err != nil {
 			return err
 		}
@@ -728,7 +845,7 @@ func cmdPeek(args []string) error {
 	fs := flag.NewFlagSet("peek", flag.ExitOnError)
 	n := fs.Int("n", 40, "lines")
 	pos := parse(fs, args)
-	w, err := mux.Resolve(first(pos))
+	w, err := resolveWindow(first(pos), "peek <window> [-n 40]")
 	if err != nil {
 		return err
 	}
@@ -745,7 +862,7 @@ func cmdPeek(args []string) error {
 }
 
 func cmdKill(args []string) error {
-	w, err := mux.Resolve(first(args))
+	w, err := resolveWindow(first(args), "kill <window>")
 	if err != nil {
 		return err
 	}
@@ -784,10 +901,11 @@ func cmdHandoff(a *app.App, args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("context saved to %s\nstarted %s in window %s — attach with `optimus attach %s`\n", path, *to, id, id)
+		fmt.Printf("context saved to %s\n", path)
+		started("started "+*to, id)
 		return nil
 	case *into != "":
-		w, err := mux.Resolve(*into)
+		w, err := resolveWindow(*into, "handoff <session> --into <window>")
 		if err != nil {
 			return err
 		}

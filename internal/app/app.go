@@ -193,7 +193,7 @@ func (a *App) Resume(s *model.Session) (string, error) {
 	// runs in a terminal of its own is taken over, not resumed beside it
 	for _, ag := range outside.Scan(nil) {
 		if ag.SessionID == s.ID {
-			return "", fmt.Errorf("session %s is already running in %s (pid %d); take it over instead of resuming a second copy", s.ShortID(), ag.Where(), ag.PID)
+			return "", fmt.Errorf("session %s is already running in %s (pid %d); take it over instead of resuming a second copy: optimus takeover %d (T in the dashboard)", s.ShortID(), ag.Where(), ag.PID, ag.PID)
 		}
 	}
 	p, bin, extra, err := a.provider(s.Agent)

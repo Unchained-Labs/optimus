@@ -50,7 +50,11 @@ Parsed sessions are cached in `~/.cache/optimus/index.gob`, keyed by file size a
 optimus resume 3f2a --attach
 ```
 
-This reopens the session inside the fleet (`claude --resume`, `codex resume`, `opencode --session`, …). If it's already open, you're taken to its window.
+This reopens the session inside the fleet (`claude --resume`, `codex resume`, `opencode --session`, …). If it's already open in optimus, you're taken to its window.
+
+If the session is still running somewhere else (another terminal tab, your own tmux), optimus won't start a second copy: two processes writing one transcript corrupt it. The terminal dashboard offers to [take it over](outside.md#take-over) instead, and the CLI says how (`optimus takeover <pid>`).
+
+Inside a window, `/clear`, `/resume` and forks switch Claude Code to another session; the window follows it, so cost, transcript and handoff are always those of the session actually running.
 
 ## Handoff
 
