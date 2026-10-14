@@ -406,7 +406,7 @@ func (Claude) Live() []LiveSession {
 			Name      string `json:"name"`
 			Status    string `json:"status"`
 		}
-		// since Claude Code 2.1 these files may hold only a peer token
+		// written lazily: until the session exists there's no id yet
 		if json.Unmarshal(b, &v) != nil || v.SessionID == "" || !pidAlive(v.PID) {
 			continue
 		}

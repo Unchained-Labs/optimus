@@ -174,8 +174,9 @@ func scan() []Agent {
 			}
 		}
 		if a.SessionID == "" {
-			// Claude Code 2.1 stopped writing the session id into its
-			// registry; a resumed or pre-assigned session still names it
+			// Claude writes its registry entry only once the session
+			// exists (not while it asks to trust the folder); a resumed
+			// or pre-assigned session names itself on argv before that
 			a.SessionID = sessionArg(p.args)
 		}
 		out = append(out, a)
