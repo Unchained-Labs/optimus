@@ -13,6 +13,15 @@ All notable changes to this project are documented here. The format follows [Kee
 - After `/clear`, `/resume` or a fork inside a window, the fleet kept showing the old session. The Claude hook now retags the window with the session actually running.
 - An agent outside optimus that had just started (still at Claude's folder-trust prompt, before Claude writes `~/.claude/sessions/<pid>.json`) showed "session unknown". A resumed or pre-assigned session is now recognised from its command line (`--resume`, `-r`, `--session-id`, `codex resume`), and when a session has to be guessed, one another process is already writing is never assigned twice.
 - Resuming a session that is already running in another terminal started a second process on the same transcript; it now refuses and points to take-over.
+- The notifier lock was dropped at the first garbage collection (nothing kept its file open), so every dashboard, TUI and `optimus watch` ran its own watcher: duplicate notifications, and each one polling tmux every two seconds. The lock now lasts as long as the process.
+- `/api/state` ran three git commands per worktree window on every poll (every open tab, every 2.5 s). Worktree diff stats are now reused for 10 s and dropped on merge or discard: with three worktree windows a poll went from 160 ms to 52 ms (median) and from ~180 ms to ~95 ms of CPU.
+- A launch or fan-out folder typed as `~name` became `$HOME` + `name` (a sibling of your home folder); `~` now only means your home folder, and fan-out checks the folder exists like launch does.
+
+### Security
+- The dashboard sends a Content-Security-Policy: scripts only from the dashboard itself (no inline script, no eval), no plugins, no framing, connections only back to the dashboard. Any script running in the page can type into an agent's terminal, so this is the backstop for a missed escape in rendered transcript text.
+- External pane ids (`ext:<socket>:<pane>`) arrive in API URLs and were joined to the tmux directory as given, so an encoded `../` could point `tmux -S` at any socket path. A socket must now be a plain name in your tmux directory and a pane a `%N` id; anything else is refused instead of falling through to the optimus server.
+- Handoff documents quote the conversation (pasted keys included) but were written world-readable (`0644` in a `0755` folder); they are now `0600` in a `0700` folder, and an existing folder is tightened.
+- The installer installed a release binary without verification when `checksums.txt` could not be downloaded; a missing checksum now aborts the install like a wrong one.
 
 ## [0.3.0] - 2026-10-04
 

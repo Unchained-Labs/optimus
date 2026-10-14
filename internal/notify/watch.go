@@ -35,6 +35,11 @@ type Watcher struct {
 
 func lockPath() string { return filepath.Join(config.StateDir(), "watcher.lock") }
 
+// lockFile holds the watcher lock open for the life of the process. It must
+// stay referenced: an unreachable *os.File is closed by its finalizer at the
+// next garbage collection, and closing it releases the flock.
+var lockFile *os.File
+
 // TryLock takes the per-user watcher lock; it returns false when another
 // watcher already runs. The lock is released when the process exits.
 func TryLock() bool {
@@ -49,7 +54,8 @@ func TryLock() bool {
 		f.Close()
 		return false
 	}
-	return true // keep f open for the life of the process
+	lockFile = f
+	return true
 }
 
 // Run polls until ctx ends. Returns immediately if another watcher holds the

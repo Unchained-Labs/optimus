@@ -344,7 +344,11 @@ func Capture(id string, lines int) (string, error) {
 // Send pastes text into a window (bracketed paste, so multi-line prompts stay
 // one message) and presses Enter when submit is set.
 func Send(id, text string, submit bool) error {
-	if path, pane, ok := parseExt(id); ok {
+	if IsExternal(id) {
+		path, pane, ok := parseExt(id)
+		if !ok {
+			return fmt.Errorf("bad pane id %q", id)
+		}
 		return sendExt(path, pane, text, submit)
 	}
 	cmd := tmux("load-buffer", "-b", "optimus-send", "-")
