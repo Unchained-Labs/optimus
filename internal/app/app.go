@@ -161,6 +161,12 @@ func Tree(w mux.Window) (worktree.Tree, bool) {
 	return worktree.Tree{Repo: w.Repo, Path: w.Worktree, Base: w.Base, Branch: w.Branch}, true
 }
 
+// WorkMessage is the commit message for an agent's uncommitted work when it
+// is merged or published.
+func WorkMessage(w mux.Window) string {
+	return "optimus: work from " + w.Name + " (" + w.Agent + ")"
+}
+
 // Fanout starts the same task in several agents, each in its own worktree of
 // dir's repository, so their results can be compared and the best merged.
 func (a *App) Fanout(agents []string, dir, prompt string) ([]string, error) {

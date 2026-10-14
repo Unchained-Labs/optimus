@@ -42,6 +42,7 @@ Usage:
   optimus fanout "task"           same task to several agents, each in its own worktree (--agents claude,codex)
   optimus compare                 agents in worktrees side by side: state, changes, branch
   optimus wt diff|merge|rm W      review, merge (--commit) or discard (--force) an agent's worktree
+  optimus wt pr W                 push an agent's branch and open a pull request (--title, --draft)
   optimus ps                      list running agents (optimus windows + other live sessions)
   optimus fleet                   one-line summary: agents, waiting, busy, today's spend (--json, --tmux)
   optimus attach [window]         attach to a window (Alt-q to come back)
