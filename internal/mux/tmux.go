@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -186,7 +187,7 @@ func Spawn(name, agent, dir, sessionID string, argv []string) (string, error) {
 		args = []string{"new-session", "-d", "-P", "-F", format, "-s", Session, "-n", name, "-c", dir, "-x", "220", "-y", "50"}
 	}
 	args = append(args, "--")
-	args = append(args, independent(argv)...)
+	args = append(args, independent(scoped(argv))...)
 	out, err := run(args...)
 	if err != nil {
 		return "", err
@@ -219,6 +220,37 @@ func independent(argv []string) []string {
 		out = append(out, "-u", v)
 	}
 	return append(out, argv...)
+}
+
+// scoped runs argv in a systemd scope of its own when the user's systemd is
+// reachable. Every agent otherwise shares one cgroup with the tmux server —
+// and with whatever started that server — so the out-of-memory killer, which
+// takes whole cgroups, ended every session at once whenever one grew too big.
+// systemd-run --scope execs in place, so the pane process is still the agent.
+// OPTIMUS_NO_SCOPE=1 turns it off.
+func scoped(argv []string) []string {
+	if !scopesAvailable() {
+		return argv
+	}
+	var b [4]byte
+	_, _ = rand.Read(b[:])
+	unit := fmt.Sprintf("optimus-agent-%x", b)
+	return append([]string{"systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit=" + unit, "--description=optimus agent", "--"}, argv...)
+}
+
+var scopesAvailable = func() bool {
+	if runtime.GOOS != "linux" || os.Getenv("OPTIMUS_NO_SCOPE") == "1" {
+		return false
+	}
+	if _, err := exec.LookPath("systemd-run"); err != nil {
+		return false
+	}
+	rt := os.Getenv("XDG_RUNTIME_DIR")
+	if rt == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(rt, "systemd", "private"))
+	return err == nil
 }
 
 var unsafe = regexp.MustCompile(`[^A-Za-z0-9._+-]+`)

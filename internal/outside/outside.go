@@ -95,10 +95,29 @@ func Scan(idx *index.Index) []Agent {
 	}
 	raw := cached
 	cacheMu.Unlock()
+	// a session is written by one process: those running in optimus and
+	// those an agent names itself are taken before anything is guessed
+	claimed := map[string]bool{}
+	if ws, _ := mux.List(); ws != nil {
+		for _, w := range ws {
+			if w.SessionID != "" && !w.Dead {
+				claimed[w.SessionID] = true
+			}
+		}
+	}
+	for _, a := range raw {
+		if a.SessionID != "" {
+			claimed[a.SessionID] = true
+		}
+	}
 	out := make([]Agent, len(raw))
-	for i, a := range raw {
-		if s := sessionFor(idx, a); s != nil {
+	for i, a := range raw { // newest process first, so it gets the newest session
+		guessed := a.SessionID == ""
+		if s := sessionFor(idx, a, claimed); s != nil {
 			a.SessionID, a.Title = s.ID, s.DisplayTitle()
+			if guessed {
+				claimed[s.ID] = true
+			}
 		}
 		out[i] = a
 	}
@@ -154,16 +173,24 @@ func scan() []Agent {
 				a.Cwd = l.Cwd
 			}
 		}
+		if a.SessionID == "" {
+			// Claude writes its registry entry only once the session
+			// exists (not while it asks to trust the folder); a resumed
+			// or pre-assigned session names itself on argv before that
+			a.SessionID = sessionArg(p.args)
+		}
 		out = append(out, a)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Started.After(out[j].Started) })
 	return out
 }
 
-// sessionFor finds the transcript an outside agent is writing: Claude says so
-// itself; for the others, the newest session of that agent in that folder
-// that was active since the process started.
-func sessionFor(idx *index.Index, a Agent) *model.Session {
+// sessionFor finds the transcript an outside agent is writing: by the id the
+// agent reports or was started with; otherwise the newest session of that
+// agent in that folder that was active since the process started and that no
+// other process is writing (claimed), so two agents in one folder are never
+// shown as the same session.
+func sessionFor(idx *index.Index, a Agent, claimed map[string]bool) *model.Session {
 	if idx == nil {
 		return nil
 	}
@@ -171,11 +198,49 @@ func sessionFor(idx *index.Index, a Agent) *model.Session {
 		return idx.Find(a.SessionID)
 	}
 	for _, s := range idx.Sessions { // newest first
-		if s.Agent == a.Agent && s.Cwd == a.Cwd && !s.End.Before(a.Started.Add(-time.Minute)) {
+		if s.Agent == a.Agent && s.Cwd == a.Cwd && !claimed[s.ID] && !s.End.Before(a.Started.Add(-time.Minute)) {
 			return s
 		}
 	}
 	return nil
+}
+
+// sessionArg is the session an agent's command line names: claude --resume
+// <id>, -r <id>, --session-id <id> (also as --flag=<id>), codex resume <id>.
+func sessionArg(args []string) string {
+	for i, a := range args {
+		for _, f := range []string{"--resume", "-r", "--session-id"} {
+			if v, ok := strings.CutPrefix(a, f+"="); ok && looksLikeID(v) {
+				return v
+			}
+			if a == f && i+1 < len(args) && looksLikeID(args[i+1]) {
+				return args[i+1]
+			}
+		}
+		if a == "resume" && i+1 < len(args) && looksLikeID(args[i+1]) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+// looksLikeID accepts UUID-shaped ids, so `claude -r` followed by a prompt or
+// another flag isn't read as a session.
+func looksLikeID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range s {
+		switch {
+		case i == 8 || i == 13 || i == 18 || i == 23:
+			if c != '-' {
+				return false
+			}
+		case !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'):
+			return false
+		}
+	}
+	return true
 }
 
 type liveClaude struct {

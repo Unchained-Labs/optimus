@@ -34,11 +34,47 @@ func TestSessionFor(t *testing.T) {
 		{Agent: "codex", ID: "new", Cwd: "/w", End: now},
 		{Agent: "codex", ID: "old", Cwd: "/w", End: now.Add(-3 * time.Hour)},
 	}}
-	if s := sessionFor(idx, Agent{Agent: "codex", Cwd: "/w", Started: now.Add(-time.Hour)}); s == nil || s.ID != "new" {
+	if s := sessionFor(idx, Agent{Agent: "codex", Cwd: "/w", Started: now.Add(-time.Hour)}, nil); s == nil || s.ID != "new" {
 		t.Errorf("got %+v", s)
 	}
-	if s := sessionFor(idx, Agent{Agent: "codex", Cwd: "/other", Started: now.Add(-time.Hour)}); s != nil {
+	if s := sessionFor(idx, Agent{Agent: "codex", Cwd: "/other", Started: now.Add(-time.Hour)}, nil); s != nil {
 		t.Errorf("other folder must not match: %+v", s)
+	}
+}
+
+func TestSessionForSkipsClaimed(t *testing.T) {
+	now := time.Now()
+	idx := &index.Index{Sessions: []*model.Session{
+		{Agent: "claude", ID: "new", Cwd: "/w", End: now},
+		{Agent: "claude", ID: "older", Cwd: "/w", End: now.Add(-time.Minute)},
+	}}
+	a := Agent{Agent: "claude", Cwd: "/w", Started: now.Add(-time.Hour)}
+	if s := sessionFor(idx, a, map[string]bool{"new": true}); s == nil || s.ID != "older" {
+		t.Errorf("a second agent in the folder got %+v, want the session nobody writes", s)
+	}
+	if s := sessionFor(idx, a, map[string]bool{"new": true, "older": true}); s != nil {
+		t.Errorf("every session is taken, got %+v", s)
+	}
+}
+
+func TestSessionArg(t *testing.T) {
+	id := "71f6caa6-872e-4a8f-b1ed-a9431efd72dc"
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"claude", "--resume", id}, id},
+		{[]string{"claude", "-r", id, "--name=x"}, id},
+		{[]string{"claude", "--session-id=" + id}, id},
+		{[]string{"codex", "resume", id}, id},
+		{[]string{"claude", "-r", "fix the build"}, ""},
+		{[]string{"claude", "--resume"}, ""},
+		{[]string{"claude"}, ""},
+	}
+	for _, c := range cases {
+		if got := sessionArg(c.args); got != c.want {
+			t.Errorf("%v: got %q want %q", c.args, got, c.want)
+		}
 	}
 }
 

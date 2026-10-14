@@ -46,6 +46,11 @@ func cmdHook(args []string) error {
 		return nil
 	}
 	rec.Pane = pane
+	// /clear, /resume and forks switch the agent to another session in the
+	// same window: retag it so the fleet follows the session actually running.
+	if prev, had := agentstate.Read(pane); rec.SessionID != "" && (!had || prev.SessionID != rec.SessionID) {
+		mux.SetWindowOption(pane, "@optimus_session", rec.SessionID)
+	}
 	_ = agentstate.Write(rec)
 	return nil
 }
