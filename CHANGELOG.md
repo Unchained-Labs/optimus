@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+- New-session folder picker that finds every project under your home folder, not only folders that already have sessions: git repos and folders with a project manifest (crawled in the background, cached, skipping dependencies and build output), ranked by name match and agent history. Type `~/` or `/` to browse like a shell; ↑↓ to choose, Enter to pick, Tab or › to open a folder. `GET /api/dirs?q=`.
+
 ### Fixed
 - Every agent ran in the cgroup of whatever started the tmux server, so the out-of-memory killer (which takes whole cgroups) ended all sessions at once and they came back when the supervisor restarted — sessions "appearing and disappearing". On Linux with a reachable systemd user manager, each agent now runs in its own `optimus-agent-*.scope`, so an OOM kill ends one session and restarting the UI ends none. `OPTIMUS_NO_SCOPE=1` turns it off.
 - A window whose transcript wasn't written yet (before its first message) borrowed the newest other session in the same folder: its title, cost, transcript and handoff showed someone else's session, so two sessions in one folder looked like one. A window that knows its session id no longer guesses.

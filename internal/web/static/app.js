@@ -445,7 +445,7 @@ function openNew({ agent, dir } = {}) {
     $("#new-rc-wrap").hidden = $("#new-fan").checked || S.newAgent !== "claude";
   }));
   const dirs = st.projects.filter((p) => p.exists);
-  $("#new-dirs").innerHTML = dirs.map((p) => `<option value="${esc(short(p.cwd))}">`).join("");
+  dirPick.close();
   $("#new-recent").innerHTML = dirs.slice(0, 6).map((p) => `<button type="button" data-dir="${esc(short(p.cwd))}">${esc(p.name)}</button>`).join("");
   $$("#new-recent button").forEach((b) => b.addEventListener("click", () => { $("#new-dir").value = b.dataset.dir; $("#new-prompt").focus(); }));
   const cur = st.windows.find((w) => w.id === S.selected);
@@ -457,6 +457,68 @@ function openNew({ agent, dir } = {}) {
   $("#dlg-new").showModal();
   $("#new-prompt").focus();
 }
+
+// Folder picker: searches every project under home (crawled on the server)
+// and every folder with history; a value typed as a path completes like a
+// shell. Tab opens the highlighted folder, Enter picks it.
+const dirPick = (() => {
+  const input = $("#new-dir"), list = $("#new-dirs");
+  let items = [], on = -1, mode = "search", seq = 0, timer;
+  const open = (yes) => { list.hidden = !yes; input.setAttribute("aria-expanded", String(yes)); };
+  const render = () => {
+    if (!items.length) {
+      list.innerHTML = `<div class="dir-empty">${mode === "complete" ? "No folders here" : "No matching project — type a path like <code>~/</code> to browse"}</div>`;
+      return open(true);
+    }
+    list.innerHTML = items.map((d, i) => `<div class="dir-item ${i === on ? "on" : ""}" role="option" aria-selected="${i === on}" data-i="${i}">
+      <span class="n">${esc(d.name)}</span><span class="p" title="${esc(d.path)}"><bdi>${esc(short(d.path))}</bdi></span>
+      ${d.git ? `<span class="b git">git</span>` : ""}${d.sessions ? `<span class="b hist" title="sessions here">${d.sessions}</span>` : ""}
+      <button type="button" class="drill" data-drill="${i}" title="Open folder" aria-label="Open ${esc(d.name)}">›</button></div>`).join("");
+    open(true);
+    list.querySelector(".dir-item.on")?.scrollIntoView({ block: "nearest" });
+  };
+  const fetchNow = async () => {
+    const q = input.value.trim(), mine = ++seq;
+    try {
+      const r = await api(`/api/dirs?q=${encodeURIComponent(q)}`);
+      if (mine !== seq) return; // a newer keystroke won
+      items = r.dirs; mode = r.mode; on = items.length ? 0 : -1;
+      if (document.activeElement === input) render();
+    } catch { /* offline: the field still takes a typed path */ }
+  };
+  const refresh = () => { clearTimeout(timer); timer = setTimeout(fetchNow, 110); };
+  const pick = (i) => { const d = items[i]; if (!d) return; input.value = short(d.path); open(false); $("#new-prompt").focus(); };
+  const drill = (i) => { const d = items[i]; if (!d) return; input.value = short(d.path) + "/"; input.focus(); fetchNow(); };
+  input.addEventListener("input", refresh);
+  input.addEventListener("focus", () => { input.select(); fetchNow(); });
+  input.addEventListener("blur", () => setTimeout(() => { if (!list.contains(document.activeElement)) open(false); }, 150));
+  input.addEventListener("keydown", (e) => {
+    const shown = !list.hidden && items.length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (list.hidden) return fetchNow();
+      on = (on + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      render();
+    } else if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault(); // never the form's first button (Cancel)
+      if (shown && on >= 0) pick(on); else { open(false); $("#new-prompt").focus(); }
+    } else if (e.key === "Tab" && shown && on >= 0 && !e.shiftKey) {
+      e.preventDefault();
+      drill(on);
+    } else if (e.key === "Escape" && !list.hidden) {
+      e.preventDefault(); e.stopPropagation(); // close the list, not the dialog
+      open(false);
+    }
+  });
+  list.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus in the field
+  list.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-drill]");
+    if (d) return drill(+d.dataset.drill);
+    const it = e.target.closest(".dir-item");
+    if (it) pick(+it.dataset.i);
+  });
+  return { close: () => { seq++; open(false); } };
+})();
 
 $("#new-btn").addEventListener("click", () => openNew());
 $("#new-fan").addEventListener("change", () => {
