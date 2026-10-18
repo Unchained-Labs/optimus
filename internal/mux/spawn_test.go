@@ -2,6 +2,7 @@ package mux
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -28,7 +29,7 @@ func TestSpawnAtOnceOnAColdServer(t *testing.T) {
 		t.Skip("tmux not installed")
 	}
 	tmp := t.TempDir()
-	t.Setenv("TMUX_TMPDIR", tmp)
+	t.Setenv("TMUX_TMPDIR", sockDir(t))
 	t.Setenv("OPTIMUS_HOME", tmp)
 	t.Setenv("OPTIMUS_NO_SCOPE", "1")
 	prev := Socket
@@ -48,4 +49,16 @@ func TestSpawnAtOnceOnAColdServer(t *testing.T) {
 	if ws, _ := List(); len(ws) != 4 {
 		t.Errorf("%d windows, want 4", len(ws))
 	}
+}
+
+// sockDir is a short folder for the test's tmux socket: macOS's per-user
+// TMPDIR plus t.TempDir() overflows the 104-byte limit on socket paths.
+func sockDir(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("/tmp", "otm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(d) })
+	return d
 }

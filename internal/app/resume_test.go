@@ -24,7 +24,7 @@ func testApp(t *testing.T) *App {
 	}
 	tmp := t.TempDir()
 	t.Setenv("OPTIMUS_HOME", filepath.Join(tmp, "home"))
-	t.Setenv("TMUX_TMPDIR", tmp)
+	t.Setenv("TMUX_TMPDIR", sockDir(t))
 	t.Setenv("OPTIMUS_NO_SCOPE", "1")
 	bin := filepath.Join(tmp, "fake-agent")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexec sleep 60\n"), 0o755); err != nil {
@@ -118,4 +118,16 @@ func samePath(a, b string) bool {
 	ra, _ := filepath.EvalSymlinks(a)
 	rb, _ := filepath.EvalSymlinks(b)
 	return ra == rb
+}
+
+// sockDir is a short folder for the test's tmux socket: macOS's per-user
+// TMPDIR plus t.TempDir() overflows the 104-byte limit on socket paths.
+func sockDir(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("/tmp", "otm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(d) })
+	return d
 }

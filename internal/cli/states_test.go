@@ -19,7 +19,7 @@ func TestHookFollowsClear(t *testing.T) {
 		t.Skip("tmux not installed")
 	}
 	tmp := t.TempDir()
-	t.Setenv("TMUX_TMPDIR", tmp)
+	t.Setenv("TMUX_TMPDIR", sockDir(t))
 	t.Setenv("OPTIMUS_HOME", tmp)
 	t.Setenv("OPTIMUS_NO_SCOPE", "1")
 	prev := mux.Socket
@@ -55,4 +55,16 @@ func TestHookFollowsClear(t *testing.T) {
 	if st := agentstate.Resolve(ws[0], "> ").State; st != mux.StateIdle {
 		t.Errorf("state after /clear: %s", st)
 	}
+}
+
+// sockDir is a short folder for the test's tmux socket: macOS's per-user
+// TMPDIR plus t.TempDir() overflows the 104-byte limit on socket paths.
+func sockDir(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("/tmp", "otm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(d) })
+	return d
 }
