@@ -72,6 +72,7 @@ func (w *Watcher) Run(ctx context.Context, every time.Duration) {
 
 // Tick checks every window once.
 func (w *Watcher) Tick() {
+	listed := time.Now()
 	ws, err := mux.List()
 	if err != nil {
 		return
@@ -115,7 +116,7 @@ func (w *Watcher) Tick() {
 			delete(w.last, id)
 		}
 	}
-	agentstate.Forget(alive)
+	agentstate.Forget(alive, listed)
 }
 
 func (w *Watcher) notify(win mux.Window, prev mux.State, info agentstate.Info) {
