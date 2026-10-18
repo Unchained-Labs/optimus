@@ -376,6 +376,22 @@ func TestWorktreeFlow(t *testing.T) {
 	if !strings.Contains(d["diff"], "+# hi") {
 		t.Fatalf("diff: %q", d["diff"])
 	}
+	// publish it: the remote is a local bare repository, so the branch is
+	// pushed but no forge can open a pull request (gh, if installed, can't
+	// either: it doesn't know the host)
+	origin := t.TempDir() + "/origin.git"
+	for _, args := range [][]string{{"init", "-q", "--bare", origin}, {"-C", repo, "remote", "add", "origin", origin}} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("%v %s", err, out)
+		}
+	}
+	pr := post("/api/windows/"+id+"/pr", `{}`)
+	if pr["branch"] != w.Branch || pr["base"] != "main" || pr["opened"] != false {
+		t.Fatalf("pr: %v", pr)
+	}
+	if out, err := exec.Command("git", "-C", origin, "rev-parse", "--verify", "-q", w.Branch).CombinedOutput(); err != nil {
+		t.Fatalf("branch not pushed: %s", out)
+	}
 	post("/api/windows/"+id+"/merge", `{}`)
 	if b, _ := os.ReadFile(repo + "/README.md"); string(b) != "# hi\n" {
 		t.Fatal("merge did not reach the main checkout")

@@ -195,7 +195,7 @@ function renderFleet() {
     $("#pane-agent").textContent = w.agent;
     $("#pane-cwd").textContent = short(w.cwd);
     $("#pane-state").outerHTML = stateBadge(w.state).replace('class="state', 'id="pane-state" class="state');
-    for (const b of ["#act-diff", "#act-merge", "#act-discard"]) $(b).hidden = !w.worktree;
+    for (const b of ["#act-diff", "#act-merge", "#act-pr", "#act-discard"]) $(b).hidden = !w.worktree;
     $("#act-kill").hidden = $("#act-rename").hidden = !!w.external;
     $("#act-takeover").hidden = !w.external;
     $("#act-transcript").disabled = !w.session_id;
@@ -426,6 +426,22 @@ function mergeWin(w) {
   if (w && confirm(`Commit and merge ${w.name}'s work (${w.worktree.label}) into ${short(w.worktree.repo)}?`))
     act(() => api(`/api/windows/${encodeURIComponent(w.id)}/merge`, { method: "POST", body: {} }), (r) => `Merged ${r.merged} into ${short(r.into)}`);
 }
+
+// Pull request: push the agent's branch and open a PR (gh on the host), or
+// get the forge's page to open one. A blank title takes it from the commits.
+$("#act-pr").addEventListener("click", async () => {
+  const w = selectedWin();
+  if (!w) return;
+  const title = prompt(`Push ${w.worktree.branch} and open a pull request.\nTitle (blank: from the commits):`, "");
+  if (title === null) return;
+  // open the tab now, while the click still counts: after the push, a popup
+  // blocker would stop it
+  const tab = window.open("", "_blank");
+  if (tab) tab.opener = null;
+  const r = await act(() => api(`/api/windows/${encodeURIComponent(w.id)}/pr`, { method: "POST", body: { title } }),
+    (r) => r.opened ? `Pull request opened into ${r.base}` : `Pushed ${r.branch}${r.note ? ": " + r.note : ""}`);
+  if (tab) r?.url ? tab.location.replace(r.url) : tab.close();
+});
 
 async function openDiff(w) {
   if (!w) return;

@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- `.worktreeinclude`: list the gitignored files a fresh worktree needs (`.env`, local config, certificates) in `.gitignore` syntax, and every agent worktree gets a copy from your main checkout. Only files git ignores are copied. It's the file Claude Code and Conductor already read, so repositories set up for them work as they are.
+- Open a pull request from an agent's worktree: `optimus wt pr W [--title T] [--draft]`, **PR** in the browser, `POST /api/windows/{id}/pr`. It commits pending work, pushes the branch and opens a pull request into the branch Merge would land in, with the GitHub CLI if it's installed; otherwise it gives the GitHub, GitLab or Bitbucket page that opens one.
 - New-session folder picker that finds every project under your home folder, not only folders that already have sessions: git repos and folders with a project manifest (crawled in the background, cached, skipping dependencies and build output), ranked by name match and agent history. Type `~/` or `/` to browse like a shell; ↑↓ to choose, Enter to pick, Tab or › to open a folder. `GET /api/dirs?q=`.
 
 ### Changed
