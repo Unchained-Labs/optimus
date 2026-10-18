@@ -46,7 +46,8 @@ type Server struct {
 	// PhoneURLs lists URLs reachable from other devices (set by the CLI).
 	PhoneURLs func(addr string) []string
 
-	dirs *dirs.Index // folders under home, for the new-session picker
+	dirs  *dirs.Index // folders under home, for the new-session picker
+	stats statsCache  // worktree diff stats, so a poll doesn't run git per window
 
 	mu       sync.Mutex
 	idx      *index.Index
@@ -125,8 +126,38 @@ func securityHeaders(h http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Content-Security-Policy", csp(r.Host))
 		h.ServeHTTP(w, r)
 	})
+}
+
+// csp is the page's Content-Security-Policy. Any script that runs here can
+// type into an agent's terminal, so scripts load only from this server (no
+// inline script, no eval): a missed esc() renders text instead of running.
+// Styles stay inline-capable because xterm.js and the meters set them.
+// connect-src names the websocket origin too: older Safari doesn't count
+// ws:// as 'self'.
+func csp(host string) string {
+	connect := "'self'"
+	if validHost(host) {
+		connect += " ws://" + host + " wss://" + host
+	}
+	return "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+		"connect-src " + connect + "; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+}
+
+// validHost accepts a Host header made only of host-name and port characters,
+// so it can't smuggle extra directives into the policy.
+func validHost(h string) bool {
+	if h == "" || len(h) > 255 {
+		return false
+	}
+	for _, c := range h {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune(".-:[]", c)) {
+			return false
+		}
+	}
+	return true
 }
 
 // page serves the app; a ?token= link logs the browser in with a cookie.
@@ -311,7 +342,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		info := agentstate.Resolve(x, screen)
 		v := windowView{ID: x.ID, Index: x.Index, Name: x.Name, Agent: x.Agent, Cwd: x.Cwd, State: info.State, Message: info.Message, Since: info.Since, Activity: x.Activity, Created: x.Created, SessionID: x.SessionID, External: x.External}
 		if t, ok := app.Tree(x); ok {
-			st, _ := t.Stats()
+			st := s.stats.get(t)
 			v.Worktree = &treeView{Path: t.Path, Repo: t.Repo, Branch: t.Branch, Stats: st, Label: st.String()}
 		}
 		if sess := idx.ForWindow(x.Agent, x.Cwd, x.SessionID, x.Created); sess != nil {
@@ -606,10 +637,8 @@ func (s *Server) launch(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if strings.HasPrefix(req.Dir, "~") {
-		home, _ := os.UserHomeDir()
-		req.Dir = home + strings.TrimPrefix(req.Dir, "~")
-	}
+	home, _ := os.UserHomeDir()
+	req.Dir = dirs.Expand(req.Dir, home)
 	if req.Dir == "" {
 		httpErr(w, http.StatusBadRequest, "pick a project directory")
 		return
@@ -768,6 +797,7 @@ func (s *Server) merge(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusConflict, err.Error())
 		return
 	}
+	s.stats.forget(t.Path)
 	writeJSON(w, map[string]string{"merged": t.Branch, "into": t.Repo})
 }
 
@@ -780,6 +810,7 @@ func (s *Server) discard(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.stats.forget(t.Path)
 	_ = mux.Kill(win.ID)
 	writeJSON(w, map[string]bool{"ok": true})
 }
@@ -794,9 +825,11 @@ func (s *Server) fanout(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, "agents and a task are required")
 		return
 	}
-	if strings.HasPrefix(req.Dir, "~") {
-		home, _ := os.UserHomeDir()
-		req.Dir = home + strings.TrimPrefix(req.Dir, "~")
+	home, _ := os.UserHomeDir()
+	req.Dir = dirs.Expand(req.Dir, home)
+	if st, err := os.Stat(req.Dir); err != nil || !st.IsDir() {
+		httpErr(w, http.StatusBadRequest, "not a directory: "+req.Dir)
+		return
 	}
 	ids, err := s.app.Fanout(req.Agents, req.Dir, req.Prompt)
 	if err != nil {

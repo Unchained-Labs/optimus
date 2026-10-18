@@ -282,14 +282,17 @@ func quote(s string) string {
 }
 
 // Save writes the document under the optimus state dir and returns its path.
+// It quotes the conversation (pasted keys and tokens included), so it is
+// readable by you alone, like the transcripts it comes from.
 func Save(s *model.Session, doc string) (string, error) {
 	dir := config.HandoffDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
+	_ = os.Chmod(dir, 0o700) // tighten a folder made by an older optimus
 	name := fmt.Sprintf("%s-%s-%s.md", time.Now().Format("20060102-150405"), s.Agent, s.ShortID())
 	p := filepath.Join(dir, name)
-	return p, os.WriteFile(p, []byte(doc), 0o644)
+	return p, os.WriteFile(p, []byte(doc), 0o600)
 }
 
 // Kickoff is the short first prompt given to the receiving agent; the full

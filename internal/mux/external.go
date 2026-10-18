@@ -48,7 +48,30 @@ func parseExt(id string) (path, pane string, ok bool) {
 	if i < 0 {
 		return "", "", false
 	}
-	return filepath.Join(tmuxDir(), rest[:i]), rest[i+1:], true
+	sock, pane := rest[:i], rest[i+1:]
+	// the id arrives from the web API: a socket name must stay inside this
+	// user's tmux directory, and a pane must be a pane id, never a path or
+	// a target that tmux would read some other way
+	if !validSocket(sock) || !validPane(pane) {
+		return "", "", false
+	}
+	return filepath.Join(tmuxDir(), sock), pane, true
+}
+
+func validSocket(s string) bool {
+	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, "/\\\x00")
+}
+
+func validPane(p string) bool {
+	if len(p) < 2 || p[0] != '%' {
+		return false
+	}
+	for _, c := range p[1:] {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func runOn(path string, args ...string) (string, error) {
@@ -68,7 +91,11 @@ func runOn(path string, args ...string) (string, error) {
 
 // on routes a command to the right tmux server for a window id.
 func on(id string, args ...string) (string, error) {
-	if path, pane, ok := parseExt(id); ok {
+	if IsExternal(id) {
+		path, pane, ok := parseExt(id)
+		if !ok {
+			return "", fmt.Errorf("bad pane id %q", id)
+		}
 		for i, a := range args {
 			if a == id {
 				args[i] = pane
@@ -133,7 +160,10 @@ func UserPanes() map[int]ExtPane {
 // ViewCmd but on your own tmux server: a grouped session (so your own
 // clients' current window doesn't change), removed by cleanup.
 func extViewCmd(id string) (*exec.Cmd, func(), error) {
-	path, pane, _ := parseExt(id)
+	path, pane, ok := parseExt(id)
+	if !ok {
+		return nil, nil, fmt.Errorf("bad pane id %q", id)
+	}
 	out, err := runOn(path, "display-message", "-p", "-t", pane, "#{session_name}"+fieldSep+"#{window_id}")
 	if err != nil {
 		return nil, nil, err
