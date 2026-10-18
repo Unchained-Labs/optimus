@@ -47,6 +47,10 @@ func TestDirItemsPath(t *testing.T) {
 
 func TestDirItemsSearch(t *testing.T) {
 	root := t.TempDir()
+	// ranking reads paths relative to home: outside it, the letters of a
+	// long temp path (macOS's /var/folders/…) can spell any query
+	defer func(h string) { home = h }(home)
+	home = root
 	crawled := []dirs.Dir{
 		{Path: filepath.Join(root, "dev", "optimus"), Name: "optimus", Git: true, Project: true},
 		{Path: filepath.Join(root, "dev", "web"), Name: "web", Project: true},
