@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `.worktreeinclude`: list the gitignored files a fresh worktree needs (`.env`, local config, certificates) in `.gitignore` syntax, and every agent worktree gets a copy from your main checkout. Only files git ignores are copied. It's the file Claude Code and Conductor already read, so repositories set up for them work as they are.
 - Open a pull request from an agent's worktree: `optimus wt pr W [--title T] [--draft]`, **PR** in the browser, `POST /api/windows/{id}/pr`. It commits pending work, pushes the branch and opens a pull request into the branch Merge would land in, with the GitHub CLI if it's installed; otherwise it gives the GitHub, GitLab or Bitbucket page that opens one.
 - New-session folder picker that finds every project under your home folder, not only folders that already have sessions: git repos and folders with a project manifest (crawled in the background, cached, skipping dependencies and build output), ranked by name match and agent history. Type `~/` or `/` to browse like a shell; ↑↓ to choose, Enter to pick, Tab or › to open a folder. `GET /api/dirs?q=`.
+- The terminal dashboard's new-session folder picker (`n`) uses the same search: every project under home, not only folders with past sessions, ranked the same way; `~/`, `/` or `./` browse, Tab opens the highlighted folder, and the typed folder itself is the first row.
+- `optimus <command> -h` and `optimus help <command>` show that command's usage and flags. Before, `-h` printed nothing, and a mistyped flag printed only the error.
 
 ### Changed
 - Browser: a folder typed relative (`dev/app`) is found from your home folder, as the picker completes it, not from wherever the dashboard was started; starting with a search term you didn't pick from (`optim`, then Ctrl+Enter) uses the highlighted match.
@@ -43,6 +45,11 @@ All notable changes to this project are documented here. The format follows [Kee
 - External pane ids (`ext:<socket>:<pane>`) arrive in API URLs and were joined to the tmux directory as given, so an encoded `../` could point `tmux -S` at any socket path. A socket must now be a plain name in your tmux directory and a pane a `%N` id; anything else is refused instead of falling through to the optimus server.
 - Handoff documents quote the conversation (pasted keys included) but were written world-readable (`0644` in a `0755` folder); they are now `0600` in a `0700` folder, and an existing folder is tightened.
 - The installer installed a release binary without verification when `checksums.txt` could not be downloaded; a missing checksum now aborts the install like a wrong one.
+- Resuming such a session from the terminal dashboard now offers to take it over in place of an error, and the CLI error names the command (`optimus takeover <pid>`).
+- The terminal dashboard's key hints were cut off on screens narrower than ~200 columns, hiding `? help` and `q quit`; those now always show and the other hints are ordered by use.
+- `optimus new`, `resume`, `takeover`, `handoff --to` and the agent shortcuts reported tmux's window id (`@3`) while `optimus ps` and the dashboard show window numbers; they now print the number and name, and how to attach.
+- `optimus kill` and `peek` without a window said `no optimus window ""`; they now show their usage, and every window command given an unknown window points to `optimus ps`.
+- Docs: per-agent systemd scopes and `OPTIMUS_NO_SCOPE`, the folder search, the resume guard, windows following `/clear` and `/resume`, the dashboard keys missing from the key table, and agents outside optimus (the FAQ still said they couldn't be driven).
 
 ## [0.3.0] - 2026-10-04
 

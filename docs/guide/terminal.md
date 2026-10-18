@@ -45,6 +45,12 @@ Claude Code and Codex sessions started by optimus report their state themselves 
 
 Press ++i++ (or ++alt+n++ while attached) to jump to the next agent waiting for you.
 
+## Starting an agent
+
+++n++ asks which agent, then where. The folder list searches every project under your home folder (git repositories and folders with a project manifest), with the folders you've used before first, so a project you've never run an agent in is a few letters away. Type `~/`, `/` or `./` to browse instead: ++tab++ opens the highlighted folder, ++enter++ starts the agent there. The first row of a typed path is the folder itself.
+
+In a git repository optimus then asks whether the agent gets its own [worktree](worktrees.md). ++shift+n++ skips the pickers: your default agent, in the project you're looking at.
+
 ## Command palette
 
 ++ctrl+k++ (or ++colon++) opens one searchable list of everything: running agents (*go to …*), recent sessions, *new &lt;agent&gt; in &lt;project&gt;* for your recent projects, and every action. Type a few words in any order (`codex api`, `rate lim`) and press ++enter++. The browser has the same palette on ++ctrl+k++ (++cmd+k++ on macOS), even while a terminal has focus.
@@ -58,8 +64,9 @@ Press ++i++ (or ++alt+n++ while attached) to jump to the next agent waiting for 
 | ++exclamation++ | answer its question without attaching | | |
 | ++shift+f++ | fan out a task to several agents in worktrees | ← | ← |
 | ++shift+t++ | take over an agent running outside optimus ([more](outside.md)) | | |
+| ++shift+c++ | quota running out: continue the session in another agent | | |
 | ++shift+d++ / ++shift+m++ / ++shift+x++ | worktree agent: diff / merge / discard | | |
-| ++n++ | start an agent: pick which and where | ← | ← |
+| ++n++ | start an agent: pick which and where ([folders](#starting-an-agent)) | ← | ← |
 | ++shift+n++ | start the default agent here | in the session's folder | in this project |
 | ++s++ | send a prompt | | |
 | ++space++ / ++b++ | mark / broadcast | | |
@@ -68,9 +75,11 @@ Press ++i++ (or ++alt+n++ while attached) to jump to the next agent waiting for 
 | ++r++ | rename | resume into the fleet | |
 | ++o++ | open transcript | open transcript | |
 | ++x++ | stop | | |
-| ++slash++ / ++a++ / ++p++ | | filter text / agent / project | |
+| ++slash++ / ++a++ / ++p++ / ++esc++ | | filter text / agent / project / clear | |
+| ++shift+s++ / ++z++ | | search inside transcripts / show automated sessions | |
 | ++c++ | | | start an agent here |
 | ++w++ | open the web dashboard | ← | ← |
+| ++shift+r++ | rescan sessions | ← | ← |
 | ++question++ / ++q++ | help / quit | ← | ← |
 
 ## From the shell

@@ -155,20 +155,42 @@ func (m *Model) viewFooter() string {
 	var keys [][2]string
 	switch m.tab {
 	case tabAgents:
-		keys = [][2]string{{"enter", "attach"}, {"i", "next ◆"}, {"!", "answer"}, {"F", "fan out"}, {"D/M/X", "diff/merge/discard"}, {"n", "new"}, {"s", "send"}, {"b", "broadcast"}, {"space", "mark"}, {"h", "handoff"}, {"o", "transcript"}, {"r", "rename"}, {"x", "kill"}}
+		// most useful first: fitKeys drops from the end on narrow screens
+		keys = [][2]string{{"enter", "attach"}, {"n", "new"}, {"s", "send"}, {"i", "next ◆"}, {"!", "answer"}, {"h", "handoff"}, {"o", "transcript"}, {"x", "kill"}, {"space/b", "mark/broadcast"}, {"F", "fan out"}, {"T", "take over"}, {"D/M/X", "diff/merge/discard"}, {"r", "rename"}}
 	case tabSessions:
-		keys = [][2]string{{"enter", "view"}, {"S", "search inside"}, {"z", "automated"}, {"r", "resume"}, {"h", "handoff"}, {"H", "summarized handoff"}, {"y", "copy ctx"}, {"/", "filter"}, {"a", "agent"}, {"p", "project"}}
+		keys = [][2]string{{"enter", "view"}, {"r", "resume"}, {"h", "handoff"}, {"/", "filter"}, {"S", "search inside"}, {"a", "agent"}, {"p", "project"}, {"z", "automated"}, {"H", "summarized handoff"}, {"y", "copy ctx"}}
 	case tabProjects:
 		keys = [][2]string{{"enter", "sessions"}, {"c", "new agent here"}}
 	case tabUsage:
 		keys = [][2]string{{"R", "reload"}}
 	}
-	keys = append(keys, [2]string{"^k", "palette"}, [2]string{"N", "quick " + m.app.Cfg.Agent()}, [2]string{"w", "web"}, [2]string{"?", "help"}, [2]string{"q", "quit"})
-	var parts []string
-	for _, k := range keys {
-		parts = append(parts, sKey.Render(k[0])+" "+sDim.Render(k[1]))
+	keys = append(keys, [2]string{"N", "quick " + m.app.Cfg.Agent()}, [2]string{"w", "web"})
+	return fitKeys(keys, [][2]string{{"^k", "palette"}, {"?", "help"}, {"q", "quit"}}, m.w)
+}
+
+// fitKeys renders key hints in width: always the ones in must (at the end,
+// so "? help" is never cut off), then as many of keys as fit, in order.
+func fitKeys(keys, must [][2]string, width int) string {
+	render := func(ks [][2]string) []string {
+		var out []string
+		for _, k := range ks {
+			out = append(out, sKey.Render(k[0])+" "+sDim.Render(k[1]))
+		}
+		return out
 	}
-	return cell(strings.Join(parts, "  "), m.w)
+	tail := strings.Join(render(must), "  ")
+	room := width - lipgloss.Width(tail)
+	var head []string
+	for _, p := range render(keys) {
+		if lipgloss.Width(strings.Join(append(head, p), "  "))+2 > room {
+			break
+		}
+		head = append(head, p)
+	}
+	if len(head) == 0 {
+		return cell(tail, width)
+	}
+	return cell(strings.Join(head, "  ")+"  "+tail, width)
 }
 
 // viewAnswer shows an agent's pending question and forwards the next key.
@@ -577,10 +599,17 @@ func (m *Model) viewPicker() string {
 		b.WriteString(cell(line, w-4) + "\n")
 	}
 	if len(p.filtered) == 0 {
-		b.WriteString(sDim.Render("  no match") + "\n")
+		empty := "  no match"
+		if p.source != nil {
+			empty = "  no matching project — type a path like ~/ to browse"
+		}
+		b.WriteString(sDim.Render(empty) + "\n")
 	}
 	b.WriteString("\n" + sDim.Render("↑↓ move · enter select · esc cancel"))
-	if p.freeText {
+	switch {
+	case p.source != nil:
+		b.WriteString(sDim.Render(" · tab open folder"))
+	case p.freeText:
 		b.WriteString(sDim.Render(" · tab complete path"))
 	}
 	return sModal.Width(w).Render(b.String())
@@ -595,6 +624,7 @@ func (m *Model) viewHelp() string {
 		{"Agents", [][2]string{{"enter", "attach — Alt-q comes back, Alt-←/→ cycles, Alt-n next agent needing you"}, {"i", "select the next agent waiting for an answer"}, {"!", "answer it without attaching: shows its question, forwards 1/2/3, y/n, enter"}, {"F", "fan out: same task to several agents, each in its own worktree"}, {"T", "take over an agent running outside optimus (↗ = in your own tmux, shown in place)"}, {"C", "quota running out: continue the session in another agent"}, {"D / M / X", "worktree agents: review diff / merge into the repo / discard"}, {"s", "send a prompt"}, {"space / b", "mark agents / broadcast a prompt"}, {"h / H", "hand this agent's context to another"}, {"o", "open transcript"}, {"r / x", "rename / kill"}}},
 		{"Sessions", [][2]string{{"enter", "read transcript"}, {"r", "resume in the multiplexer"}, {"h", "hand off context to a new agent, a running one, clipboard or file"}, {"H", "same, condensed by an agent first"}, {"y", "copy handoff to clipboard"}, {"/ a p esc", "filter text / agent / project / clear"}, {"S", "search inside transcripts"}, {"z", "show / hide automated sessions (claude -p, cron jobs)"}}},
 		{"Projects", [][2]string{{"enter", "sessions of this project"}, {"c", "start an agent here"}}},
+		{"Transcript", [][2]string{{"r", "resume"}, {"h / H / y", "hand off / condensed / copy"}, {"esc", "back"}}},
 	}
 	var b strings.Builder
 	b.WriteString(sLogo.Render("OPTIMUS") + sDim.Render("  the tmux of AI agents") + "\n")

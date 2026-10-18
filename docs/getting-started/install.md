@@ -40,7 +40,13 @@ If that folder isn't on your `PATH`, the wizard offers to add it to `~/.zshrc`, 
 curl -fsSL https://raw.githubusercontent.com/Unchained-Labs/optimus/main/install.sh | sudo sh -s -- --bin-dir /usr/local/bin --no-setup
 ```
 
-Keep `--no-setup` with `sudo`, so the setup questions don't configure root's account. Each user's config is created on first run.
+Keep `--no-setup` with `sudo`, so the setup questions don't configure root's account. Each user's config is created on first run; to do what the wizard would have, each user runs:
+
+```sh
+optimus config set default_agent claude     # or codex, opencode, …
+optimus config statusline --install         # real Claude 5h / 7d quota
+optimus config set budgets.daily_usd 50     # optional
+```
 
 ## Binary or source?
 
