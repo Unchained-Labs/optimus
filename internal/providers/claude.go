@@ -406,7 +406,8 @@ func (Claude) Live() []LiveSession {
 			Name      string `json:"name"`
 			Status    string `json:"status"`
 		}
-		if json.Unmarshal(b, &v) != nil || !pidAlive(v.PID) {
+		// written lazily: until the session exists there's no id yet
+		if json.Unmarshal(b, &v) != nil || v.SessionID == "" || !pidAlive(v.PID) {
 			continue
 		}
 		out = append(out, LiveSession{Agent: "claude", ID: v.SessionID, PID: v.PID, Cwd: v.Cwd, Name: v.Name, Status: v.Status})

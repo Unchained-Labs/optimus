@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+- Every agent ran in the cgroup of whatever started the tmux server, so the out-of-memory killer (which takes whole cgroups) ended all sessions at once and they came back when the supervisor restarted — sessions "appearing and disappearing". On Linux with a reachable systemd user manager, each agent now runs in its own `optimus-agent-*.scope`, so an OOM kill ends one session and restarting the UI ends none. `OPTIMUS_NO_SCOPE=1` turns it off.
+- A window whose transcript wasn't written yet (before its first message) borrowed the newest other session in the same folder: its title, cost, transcript and handoff showed someone else's session, so two sessions in one folder looked like one. A window that knows its session id no longer guesses.
+- After `/clear`, `/resume` or a fork inside a window, the fleet kept showing the old session. The Claude hook now retags the window with the session actually running.
+- An agent outside optimus that had just started (still at Claude's folder-trust prompt, before Claude writes `~/.claude/sessions/<pid>.json`) showed "session unknown". A resumed or pre-assigned session is now recognised from its command line (`--resume`, `-r`, `--session-id`, `codex resume`), and when a session has to be guessed, one another process is already writing is never assigned twice.
+- Resuming a session that is already running in another terminal started a second process on the same transcript; it now refuses and points to take-over.
+
 ## [0.3.0] - 2026-10-04
 
 Bring in agents started elsewhere, and a browser terminal that survives sleep, backgrounding and flaky networks.
