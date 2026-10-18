@@ -204,6 +204,29 @@ func TestStatsCache(t *testing.T) {
 	}
 }
 
+// TestProjectDir: a folder typed in the browser is found from home, whatever
+// directory the dashboard was started in.
+func TestProjectDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	os.MkdirAll(filepath.Join(home, "dev", "app"), 0o755)
+	os.WriteFile(filepath.Join(home, "notes"), nil, 0o644)
+	want := filepath.Join(home, "dev", "app")
+	for _, in := range []string{"~/dev/app", " ~/dev/app/ ", "dev/app", "./dev/app", want} {
+		if got, err := projectDir(in); err != nil || got != want {
+			t.Errorf("%q: %q %v", in, got, err)
+		}
+	}
+	if got, err := projectDir("~"); err != nil || got != home {
+		t.Errorf("~: %q %v", got, err)
+	}
+	for _, in := range []string{"", "  ", "~/nope", "notes", "~dev/app"} {
+		if got, err := projectDir(in); err == nil {
+			t.Errorf("%q accepted as %q", in, got)
+		}
+	}
+}
+
 func TestTerminalRoundTrip(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")

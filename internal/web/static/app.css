@@ -188,6 +188,8 @@ table.sessions { width: 100%; border-collapse: collapse; }
 .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
 .toast { background: var(--surface); border-left: 3px solid var(--green); padding: 10px 14px; border-radius: 8px; max-width: 420px; box-shadow: 0 6px 24px rgba(0,0,0,.3); font-size: 13px; }
 .toast.err { border-left-color: var(--red); }
+.toast { cursor: pointer; }
+.offline { padding: 6px 14px; background: color-mix(in srgb, var(--red) 18%, transparent); border-bottom: 1px solid var(--surface); font-size: 13px; text-align: center; }
 
 /* phones */
 @media (max-width: 760px) {
@@ -207,6 +209,21 @@ table.sessions { width: 100%; border-collapse: collapse; }
   .bottom-nav button.on { color: var(--text); box-shadow: inset 0 2px var(--blue); }
   .grid2 { grid-template-columns: 1fr; }
   .sessions .hide-sm { display: none; }
+  /* a worktree agent has seven actions: wrap them rather than push Stop off-screen */
+  .pane-actions { flex-wrap: wrap; }
+  /* the row opens the transcript, which has Resume and Handoff; the buttons only forced a sideways scroll */
+  .sessions td.title { min-width: 0; }
+  .sessions .row-actions { display: none; }
+}
+
+/* touch screens: finger-sized targets, and no hints for keys they don't have */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px; } /* below 16px iOS zooms the page on focus */
+  .keys button { min-height: 40px; min-width: 44px; font-size: 14px; }
+  .dir-item { min-height: 44px; }
+  .dir-item .drill { min-width: 44px; align-self: stretch; font-size: 18px; }
+  .recent button { padding: 6px 10px; }
+  kbd, .dir-hint { display: none; }
 }
 
 /* attention */
