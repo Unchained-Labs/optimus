@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,8 @@ type Tree struct {
 	Path   string // the worktree directory the agent works in
 	Branch string // optimus/<agent>-<label>-<id>
 	Base   string // commit the branch started from
+
+	Copied []string // files copied from the main checkout on creation (.worktreeinclude)
 }
 
 func git(dir string, args ...string) (string, error) {
@@ -86,6 +89,9 @@ func Create(dir, agent, label string) (Tree, error) {
 	if _, err := git(root, "worktree", "add", "-b", t.Branch, t.Path, t.Base); err != nil {
 		return Tree{}, err
 	}
+	// best effort: a missing .env makes the agent's build fail, which it
+	// reports and you fix; refusing to start the agent over it would not help
+	t.Copied, _ = t.CopyIncluded()
 	return t, nil
 }
 
@@ -249,4 +255,85 @@ func samePath(a, b string) bool {
 	ra, err1 := filepath.EvalSymlinks(a)
 	rb, err2 := filepath.EvalSymlinks(b)
 	return err1 == nil && err2 == nil && ra == rb
+}
+
+// IncludeFile names the file listing gitignored files a new worktree needs
+// (.env, local config, certificates), in .gitignore syntax. It's the same
+// file Claude Code and Conductor read, so a repository set up for them works
+// here unchanged.
+const IncludeFile = ".worktreeinclude"
+
+// CopyIncluded copies into the worktree every file of the main checkout that
+// matches a pattern in .worktreeinclude and is ignored by git: a fresh
+// checkout has no .env, so without them the agent's first build or test run
+// fails. Tracked files are never copied (the checkout has them), files
+// already in the worktree are kept, and one file that can't be copied
+// doesn't stop the rest. It returns the paths copied, relative to the root.
+func (t Tree) CopyIncluded() ([]string, error) {
+	inc := filepath.Join(t.Repo, IncludeFile)
+	if _, err := os.Stat(inc); err != nil {
+		return nil, nil
+	}
+	out, err := git(t.Repo, "ls-files", "-z", "--others", "--ignored", "--exclude-from="+inc)
+	if err != nil || out == "" {
+		return nil, err
+	}
+	// keep only what git ignores: an untracked file that isn't ignored is
+	// work in progress in the main checkout, not local configuration
+	ci := exec.Command("git", "-C", t.Repo, "check-ignore", "-z", "--stdin")
+	ci.Stdin = strings.NewReader(out)
+	ign, _ := ci.Output() // exit 1 means none is ignored
+	var copied []string
+	var errs []error
+	for _, rel := range strings.Split(string(ign), "\x00") {
+		if rel == "" {
+			continue
+		}
+		dst := filepath.Join(t.Path, rel)
+		if _, err := os.Lstat(dst); err == nil {
+			continue
+		}
+		if err := copyFile(filepath.Join(t.Repo, rel), dst); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", rel, err))
+			continue
+		}
+		copied = append(copied, rel)
+	}
+	return copied, errors.Join(errs...)
+}
+
+// copyFile copies a regular file with its permissions, or recreates a
+// symlink as a symlink.
+func copyFile(src, dst string) error {
+	st, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if st.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(src)
+		if err != nil {
+			return err
+		}
+		return os.Symlink(target, dst)
+	}
+	if !st.Mode().IsRegular() {
+		return nil // sockets, fifos: nothing to carry over
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, st.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
