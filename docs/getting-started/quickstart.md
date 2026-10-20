@@ -19,7 +19,7 @@ You land on **Agents**. Your existing sessions are already indexed: press ++2++ 
 
 === "From the dashboard"
 
-    Press ++shift+n++ to start your default agent in the project you're looking at, or ++n++ to pick the agent and folder.
+    Press ++shift+n++ to start your default agent in the project you're looking at, or ++n++ to pick the agent and folder: type part of a project's name to search every project under your home folder, or `~/` to browse.
 
 === "From the browser"
 
@@ -36,7 +36,7 @@ You're now inside the agent. Press ++alt+q++ to go back to the dashboard. The ag
 | ++space++ then ++b++ | mark agents, broadcast one prompt to them |
 | ++alt+left++ / ++alt+right++ | while attached: switch agents |
 
-Agents show **busy**, **input** (waiting for you) or **idle**, so you can see which one needs attention.
+Agents show **busy**, **input** (waiting for you) or **idle**, so you can see which one needs attention. Press ++question++ for every key, or ++ctrl+k++ to search actions by name.
 
 ## 4. Take it to your phone
 

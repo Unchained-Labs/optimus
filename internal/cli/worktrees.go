@@ -46,7 +46,7 @@ func cmdWorktree(args []string) error {
 		}
 		return page(d)
 	case "merge":
-		fs := flag.NewFlagSet("merge", flag.ExitOnError)
+		fs := flag.NewFlagSet("wt merge", flag.ExitOnError)
 		commit := fs.Bool("commit", false, "commit the agent's uncommitted changes first")
 		pos := parse(fs, rest)
 		w, err := treeOf(first(pos))
@@ -84,7 +84,7 @@ func cmdWorktree(args []string) error {
 		}
 		return nil
 	case "rm", "remove":
-		fs := flag.NewFlagSet("rm", flag.ExitOnError)
+		fs := flag.NewFlagSet("wt rm", flag.ExitOnError)
 		force := fs.Bool("force", false, "discard unmerged or uncommitted work")
 		pos := parse(fs, rest)
 		w, err := treeOf(first(pos))

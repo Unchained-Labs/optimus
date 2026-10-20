@@ -209,7 +209,7 @@ func cmdAgentShortcut(a *app.App, agent string, args []string) error {
 		return err
 	}
 	if *detach {
-		fmt.Printf("started %s in window %s\n", agent, id)
+		started("started "+agent, id)
 		return nil
 	}
 	return mux.AttachCmd(id).Run()

@@ -21,6 +21,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/clip"
+	"github.com/Unchained-Labs/optimus/internal/dirs"
 	"github.com/Unchained-Labs/optimus/internal/handoff"
 	"github.com/Unchained-Labs/optimus/internal/index"
 	"github.com/Unchained-Labs/optimus/internal/model"
@@ -69,10 +70,18 @@ type picker struct {
 	filter   textinput.Model
 	filtered []pickItem
 	freeText bool // Enter with no match uses the typed text as value
-	onPick   func(m *Model, value string) tea.Cmd
+	// source, when set, computes the rows for what's typed (instead of
+	// filtering items), e.g. a search of every project under home.
+	source func(q string) []pickItem
+	onPick func(m *Model, value string) tea.Cmd
 }
 
 func (p *picker) refilter() {
+	if p.source != nil {
+		p.filtered = p.source(p.filter.Value())
+		p.cur = 0
+		return
+	}
 	words := strings.Fields(strings.ToLower(p.filter.Value()))
 	p.filtered = p.filtered[:0]
 	for _, it := range p.items {
@@ -82,6 +91,25 @@ func (p *picker) refilter() {
 	}
 	if p.cur >= len(p.filtered) {
 		p.cur = max(len(p.filtered)-1, 0)
+	}
+}
+
+// refresh recomputes a sourced picker's rows (a background crawl may have
+// found more) and keeps the cursor on the same row.
+func (p *picker) refresh() {
+	if p.source == nil {
+		return
+	}
+	cur := ""
+	if p.cur < len(p.filtered) {
+		cur = p.filtered[p.cur].value
+	}
+	p.filtered = p.source(p.filter.Value())
+	p.cur = 0
+	for i, it := range p.filtered {
+		if it.value == cur {
+			p.cur = i
+		}
 	}
 }
 
@@ -128,6 +156,8 @@ type Model struct {
 
 	// projects tab
 	pCur, pOff int
+
+	dirIdx *dirs.Index // every project under home, for the folder picker
 
 	// modals
 	pick        *picker
@@ -283,6 +313,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		cmds := []tea.Cmd{tick(), m.pollWindows()}
+		if m.mode == modePick {
+			m.pick.refresh()
+		}
 		if time.Since(m.idx.Loaded) > 30*time.Second && !m.loading {
 			m.loading = true
 			cmds = append(cmds, m.loadIndex())
@@ -765,14 +798,14 @@ func (m *Model) keyAgents(key string) (tea.Model, tea.Cmd) {
 			if s := m.sessionForWindow(*w); s != nil {
 				return m, m.handoffPicker(s, key == "H")
 			}
-			m.flash("no transcript known for this window yet (it may not have saved one)", true)
+			m.flash("no transcript for this window yet: the agent writes it after the first message", true)
 		}
 	case "o":
 		if w != nil {
 			if s := m.sessionForWindow(*w); s != nil {
 				return m, m.openDetail(s)
 			}
-			m.flash("no transcript known for this window yet", true)
+			m.flash("no transcript for this window yet: the agent writes it after the first message", true)
 		}
 	}
 	return m, nil
@@ -921,6 +954,17 @@ func (m *Model) openDetail(s *model.Session) tea.Cmd {
 
 func (m *Model) resume(s *model.Session) tea.Cmd {
 	m.mode = modeNormal
+	// a second process on one transcript corrupts it: a session running in
+	// a terminal of its own is taken over, not resumed beside it
+	for _, o := range m.outside {
+		if o.SessionID == s.ID && !o.Container {
+			pid := strconv.Itoa(o.PID)
+			m.confirm(fmt.Sprintf("%s is already running in %s. Take it over: stop it there and continue here? (y/N)", s.ShortID(), o.Where()), func(m *Model) tea.Cmd {
+				return m.takeOver(pid)
+			})
+			return nil
+		}
+	}
 	m.busy = "resuming " + s.ShortID() + "…"
 	a := m.app
 	return func() tea.Msg {
@@ -1129,22 +1173,78 @@ func (m *Model) newAgentPicker(dir string) tea.Cmd {
 }
 
 func (m *Model) dirPicker(agent string) {
-	wd, _ := os.Getwd()
-	items := []pickItem{{label: shortHome(wd), detail: "current dir", value: wd}}
-	seen := map[string]bool{wd: true}
-	for _, p := range m.projects() {
-		if p.Cwd == "" || seen[p.Cwd] {
-			continue
-		}
-		if st, err := os.Stat(p.Cwd); err != nil || !st.IsDir() {
-			continue
-		}
-		seen[p.Cwd] = true
-		items = append(items, pickItem{label: shortHome(p.Cwd), detail: "last used " + ago(p.Last), value: p.Cwd})
+	if m.dirIdx == nil {
+		m.dirIdx = dirs.NewIndex(home)
 	}
-	m.openPicker("Start "+agent+" in… (type a path, Tab completes)", items, true, func(m *Model, dir string) tea.Cmd {
+	m.dirIdx.Dirs(0) // start the crawl; rows fill in as it finds projects
+	wd, _ := os.Getwd()
+	m.openPicker("Start "+agent+" in… (type a name to search, ~/ to browse)", nil, true, func(m *Model, dir string) tea.Cmd {
 		return m.launch(agent, expandHome(dir))
 	})
+	idx := m.dirIdx
+	m.pick.source = func(q string) []pickItem {
+		var known []dirs.Known
+		for _, p := range m.projects() {
+			known = append(known, dirs.Known{Path: p.Cwd, Sessions: p.Sessions, Last: p.Last})
+		}
+		return dirItems(q, wd, idx.Dirs(0), known)
+	}
+	m.pick.refilter()
+}
+
+// dirItems are the folder picker's rows for q, like the browser's picker: a
+// name searches every project under home and every folder with agent
+// history; a path (~/, /, ./) lists the folders it continues into, after the
+// typed folder itself. With nothing typed, the current folder comes first.
+func dirItems(q, wd string, crawled []dirs.Dir, known []dirs.Known) []pickItem {
+	var out []pickItem
+	seen := map[string]bool{}
+	add := func(d dirs.Dir, note string) {
+		if seen[d.Path] {
+			return
+		}
+		seen[d.Path] = true
+		var detail []string
+		if note != "" {
+			detail = append(detail, note)
+		}
+		if d.Git {
+			detail = append(detail, "git")
+		}
+		if d.Sessions > 0 {
+			n := fmt.Sprintf("%d sessions", d.Sessions)
+			if d.Sessions == 1 {
+				n = "1 session"
+			}
+			detail = append(detail, n+" · "+ago(d.Last))
+		}
+		out = append(out, pickItem{label: shortHome(d.Path), detail: strings.Join(detail, " · "), value: d.Path})
+	}
+	q = strings.TrimSpace(q)
+	if dirs.IsPath(q) || q == "." {
+		full := q
+		if q == "." || strings.HasPrefix(q, "./") {
+			full = filepath.Join(wd, q)
+		}
+		full = dirs.Expand(full, home)
+		if st, err := os.Stat(full); err == nil && st.IsDir() {
+			add(dirs.Dir{Path: filepath.Clean(full)}, "this folder")
+		}
+		if strings.HasPrefix(q, "./") || q == "." {
+			q = wd + "/" + strings.TrimPrefix(strings.TrimPrefix(q, "."), "/")
+		}
+		for _, d := range dirs.Complete(q, home, 60) {
+			add(d, "")
+		}
+		return out
+	}
+	if q == "" && wd != "" {
+		add(dirs.Dir{Path: wd}, "current folder")
+	}
+	for _, d := range dirs.Search(q, crawled, known, home, 40) {
+		add(d, "")
+	}
+	return out
 }
 
 // launch starts an agent; in a git repository it first asks whether the
@@ -1248,7 +1348,7 @@ func (m *Model) openPicker(title string, items []pickItem, freeText bool, onPick
 	f.Prompt = "› "
 	f.Placeholder = "type to filter"
 	if freeText {
-		f.Placeholder = "type a path or filter"
+		f.Placeholder = "a project name, or a path like ~/dev/"
 	}
 	f.Focus()
 	m.pick = &picker{title: title, items: items, filter: f, freeText: freeText, onPick: onPick}
@@ -1273,6 +1373,15 @@ func (m *Model) keyPick(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "tab":
+		if p.source != nil {
+			// open the highlighted folder, like Tab in the browser's picker
+			if p.cur < len(p.filtered) {
+				p.filter.SetValue(shortHome(p.filtered[p.cur].value) + "/")
+				p.filter.CursorEnd()
+				p.refilter()
+			}
+			return m, nil
+		}
 		if p.freeText {
 			v := p.filter.Value()
 			if v == "" && p.cur < len(p.filtered) {
@@ -1286,7 +1395,7 @@ func (m *Model) keyPick(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.mode = modeNormal
 		typed := strings.TrimSpace(p.filter.Value())
-		if p.freeText && typed != "" && looksLikePath(typed) {
+		if p.freeText && p.source == nil && typed != "" && looksLikePath(typed) {
 			if st, err := os.Stat(expandHome(typed)); err == nil && st.IsDir() {
 				return m, p.onPick(m, expandHome(typed))
 			}
@@ -1294,7 +1403,10 @@ func (m *Model) keyPick(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if p.cur < len(p.filtered) {
 			return m, p.onPick(m, p.filtered[p.cur].value)
 		}
-		if p.freeText && typed != "" {
+		switch {
+		case p.source != nil && typed != "" && !looksLikePath(typed):
+			m.flash("no folder matches "+strconv.Quote(typed)+" — type a path like ~/ to browse", true)
+		case p.freeText && typed != "":
 			m.flash("not a directory: "+typed, true)
 		}
 		return m, nil
@@ -1500,25 +1612,31 @@ func (m *Model) takeOverPicker() tea.Cmd {
 		}
 		items = append(items, pickItem{label: label, detail: o.Status + " · " + o.Where(), value: strconv.Itoa(o.PID)})
 	}
-	a, idx := m.app, m.idx
 	m.openPicker("Take over — stop it where it runs and continue the same session here", items, false, func(m *Model, v string) tea.Cmd {
-		ag, ok := a.FindOutside(idx, v)
-		if !ok {
-			m.flash("it's gone", true)
-			return nil
-		}
-		run := func(force bool) tea.Cmd {
-			m.busy = "taking over " + ag.Agent + "…"
-			return func() tea.Msg {
-				id, err := a.TakeOver(idx, ag, force)
-				return doneMsg{text: ag.Agent + " now runs in optimus", err: err, attach: id, reload: true}
-			}
-		}
-		if ag.Status == "busy" {
-			m.confirm("It's mid-turn: stopping it cuts that turn short. Take it over anyway? (y/N)", func(m *Model) tea.Cmd { return run(true) })
-			return nil
-		}
-		return run(false)
+		return m.takeOver(v)
 	})
 	return textinput.Blink
+}
+
+// takeOver moves the outside agent with this pid into optimus, asking first
+// when it's mid-turn.
+func (m *Model) takeOver(pid string) tea.Cmd {
+	a, idx := m.app, m.idx
+	ag, ok := a.FindOutside(idx, pid)
+	if !ok {
+		m.flash("it's gone", true)
+		return nil
+	}
+	run := func(force bool) tea.Cmd {
+		m.busy = "taking over " + ag.Agent + "…"
+		return func() tea.Msg {
+			id, err := a.TakeOver(idx, ag, force)
+			return doneMsg{text: ag.Agent + " now runs in optimus", err: err, attach: id, reload: true}
+		}
+	}
+	if ag.Status == "busy" {
+		m.confirm("It's mid-turn: stopping it cuts that turn short. Take it over anyway? (y/N)", func(m *Model) tea.Cmd { return run(true) })
+		return nil
+	}
+	return run(false)
 }

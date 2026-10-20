@@ -63,6 +63,7 @@ optimus config set KEY VALUE
 |---|---|
 | `OPTIMUS_HOME` | put config, state and cache under one directory |
 | `OPTIMUS_SOCKET` | use another tmux server (e.g. for tests or demos) |
+| `OPTIMUS_NO_SCOPE=1` | on Linux, don't start each agent in its own systemd scope (see [Architecture](../reference/architecture.md#design-notes)) |
 | `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `OPENCODE_DATA_DIR` | where each agent keeps its data |
 | `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` | respected for optimus's own files |
 

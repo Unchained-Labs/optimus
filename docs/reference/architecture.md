@@ -33,6 +33,9 @@ flowchart LR
 | `internal/usage` | grouping by day, model, agent and project; 5-hour blocks; budgets; projects |
 | `internal/ratelimits` | Claude quota snapshots from the status line, Codex quota from rollouts |
 | `internal/mux` | the tmux backend: spawn, list, capture, send, keys, private browser views, state detection |
+| `internal/agentstate` | states the agents report through hooks, merged with what the screen shows |
+| `internal/outside` | agents running outside optimus: found by process, linked in place or taken over |
+| `internal/dirs` | folders to start a session in: every project under home, and path completion |
 | `internal/handoff` | context documents within a token budget, optional condensing by an agent |
 | `internal/tui` | the terminal dashboard |
 | `internal/web` | the browser dashboard: JSON API, token auth, websocket terminals, embedded static UI |
@@ -44,6 +47,8 @@ flowchart LR
 - **Hour buckets, not raw events.** Sessions store per-hour, per-model usage, enough for daily charts, 5-hour blocks and budgets, and small enough to cache thousands of sessions.
 - **Dedup at the source.** Claude Code writes one line per content block of a response, and Codex reports cumulative counters. Providers dedupe by message id or take deltas, so nothing is counted twice.
 - **tmux as the process supervisor.** Agents outlive every UI. Optimus windows carry `@optimus_agent`, `@optimus_cwd` and `@optimus_session` options; background services (the web dashboard) run in a separate `optimus-svc` session that is never listed as an agent.
+- **One cgroup per agent.** On Linux with a systemd user manager, each agent runs in its own `optimus-agent-*.scope` (`systemd-run --user --scope`, which execs in place, so the pane's process is still the agent). The out-of-memory killer takes whole cgroups: without scopes one runaway agent ended every session at once, and restarting whatever started tmux took them all down. `OPTIMUS_NO_SCOPE=1` turns it off.
+- **The window follows the session.** A window's `@optimus_session` is set at launch and updated by the agent's hooks when it switches session (`/clear`, `/resume`, a fork), so cost, transcript and handoff follow what's actually running. A window that knows its session never guesses one from its folder.
 - **Browser views are grouped sessions.** Each terminal tab gets its own current window and size, and is removed when the websocket closes. Leftovers from a crash are swept on startup.
 - **Handoffs by reference.** Agents receive a short prompt pointing to the document on disk, so the same mechanism works for every agent.
 
