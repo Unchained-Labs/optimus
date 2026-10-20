@@ -186,9 +186,12 @@ func Spawn(name, agent, dir, sessionID string, argv []string) (string, error) {
 	} else {
 		args = []string{"new-session", "-d", "-P", "-F", format, "-s", Session, "-n", name, "-c", dir, "-x", "220", "-y", "50"}
 	}
-	args = append(args, "--")
-	args = append(args, independent(scoped(argv))...)
-	out, err := run(args...)
+	cmd := append([]string{"--"}, independent(scoped(argv))...)
+	out, err := run(append(args, cmd...)...)
+	if err != nil && args[0] == "new-session" && strings.Contains(err.Error(), "duplicate session") {
+		// another launch started the server first (two at once from the web)
+		out, err = run(append([]string{"new-window", "-d", "-P", "-F", format, "-t", Session + ":", "-n", name, "-c", dir}, cmd...)...)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -235,7 +238,11 @@ func scoped(argv []string) []string {
 	var b [4]byte
 	_, _ = rand.Read(b[:])
 	unit := fmt.Sprintf("optimus-agent-%x", b)
-	return append([]string{"systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit=" + unit, "--description=optimus agent", "--"}, argv...)
+	// the pane gets the tmux server's environment, not ours: a server started
+	// without XDG_RUNTIME_DIR (cron, ssh without a login session) left
+	// systemd-run unable to reach the user manager, and the agent died before
+	// it started
+	return append([]string{"env", "XDG_RUNTIME_DIR=" + os.Getenv("XDG_RUNTIME_DIR"), "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit=" + unit, "--description=optimus agent", "--"}, argv...)
 }
 
 var scopesAvailable = func() bool {
@@ -344,7 +351,11 @@ func Capture(id string, lines int) (string, error) {
 // Send pastes text into a window (bracketed paste, so multi-line prompts stay
 // one message) and presses Enter when submit is set.
 func Send(id, text string, submit bool) error {
-	if path, pane, ok := parseExt(id); ok {
+	if IsExternal(id) {
+		path, pane, ok := parseExt(id)
+		if !ok {
+			return fmt.Errorf("bad pane id %q", id)
+		}
 		return sendExt(path, pane, text, submit)
 	}
 	cmd := tmux("load-buffer", "-b", "optimus-send", "-")
