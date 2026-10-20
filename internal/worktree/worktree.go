@@ -212,3 +212,41 @@ func (t Tree) Remove(force bool) error {
 	_, err := git(t.Repo, "branch", del, t.Branch)
 	return err
 }
+
+// Of recovers the worktree optimus made at path, for an agent whose window
+// is gone (it exited, or the tmux server restarted): the window carried the
+// tree, so resuming its session would otherwise run in the worktree with no
+// way to diff, merge or discard it. Base is where the branch meets the main
+// checkout's HEAD — the commit it started from unless the main branch was
+// reset behind it.
+func Of(path string) (Tree, bool) {
+	root := filepath.Join(config.DataDir(), "worktrees") + string(filepath.Separator)
+	if !strings.HasPrefix(filepath.Clean(path)+string(filepath.Separator), root) {
+		return Tree{}, false
+	}
+	top, ok := Root(path)
+	if !ok || !samePath(top, path) {
+		return Tree{}, false
+	}
+	br, err := git(path, "symbolic-ref", "--short", "HEAD")
+	if err != nil || !strings.HasPrefix(strings.TrimSpace(br), "optimus/") {
+		return Tree{}, false
+	}
+	common, err := git(path, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return Tree{}, false
+	}
+	t := Tree{Path: path, Branch: strings.TrimSpace(br), Repo: filepath.Dir(strings.TrimSpace(common))}
+	base, err := git(t.Repo, "merge-base", "HEAD", t.Branch)
+	if err != nil {
+		return Tree{}, false
+	}
+	t.Base = strings.TrimSpace(base)
+	return t, true
+}
+
+func samePath(a, b string) bool {
+	ra, err1 := filepath.EvalSymlinks(a)
+	rb, err2 := filepath.EvalSymlinks(b)
+	return err1 == nil && err2 == nil && ra == rb
+}

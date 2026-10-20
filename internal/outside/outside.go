@@ -21,6 +21,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/index"
 	"github.com/Unchained-Labs/optimus/internal/model"
 	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/providers"
 )
 
 // Agent is a coding agent process running outside optimus.
@@ -93,7 +94,7 @@ func Scan(idx *index.Index) []Agent {
 	if time.Since(cacheAt) >= 2*time.Second || cached == nil {
 		cached, cacheAt = scan(), time.Now()
 	}
-	raw := cached
+	raw := running(cached)
 	cacheMu.Unlock()
 	// a session is written by one process: those running in optimus and
 	// those an agent names itself are taken before anything is guessed
@@ -122,6 +123,29 @@ func Scan(idx *index.Index) []Agent {
 		out[i] = a
 	}
 	return out
+}
+
+// running drops agents that exited since the scan was cached: a take-over
+// stops the process and resumes its session within those two seconds, and a
+// stale entry still claiming the session made that resume refuse to start.
+func running(agents []Agent) []Agent {
+	out := agents[:0:0]
+	for _, a := range agents {
+		if Same(a) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// Same reports whether a's process is still the one that was scanned: alive,
+// and (on Linux) started at the same time, so a pid the kernel has since
+// handed to another program is never signalled or shown as the agent.
+func Same(a Agent) bool {
+	if !Alive(a.PID) {
+		return false
+	}
+	return a.Started.IsZero() || startTime(a.PID).Equal(a.Started)
 }
 
 func scan() []Agent {
@@ -263,10 +287,13 @@ func claudeLive() map[int]liveClaude {
 			continue
 		}
 		var v struct {
-			PID int `json:"pid"`
+			PID       int    `json:"pid"`
+			ProcStart string `json:"procStart"`
 			liveClaude
 		}
-		if json.Unmarshal(b, &v) == nil && v.PID > 0 {
+		// a killed Claude leaves its file behind: a pid since reused by
+		// another Claude must not inherit that session
+		if json.Unmarshal(b, &v) == nil && v.PID > 0 && providers.RegistryAlive(v.PID, v.ProcStart) {
 			out[v.PID] = v.liveClaude
 		}
 	}
