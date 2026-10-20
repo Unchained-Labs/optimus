@@ -7,7 +7,17 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 - New-session folder picker that finds every project under your home folder, not only folders that already have sessions: git repos and folders with a project manifest (crawled in the background, cached, skipping dependencies and build output), ranked by name match and agent history. Type `~/` or `/` to browse like a shell; ↑↓ to choose, Enter to pick, Tab or › to open a folder. `GET /api/dirs?q=`.
 
+### Changed
+- Browser: a folder typed relative (`dev/app`) is found from your home folder, as the picker completes it, not from wherever the dashboard was started; starting with a search term you didn't pick from (`optim`, then Ctrl+Enter) uses the highlighted match.
+- Browser: the message box's **all** (broadcast) unticks after each broadcast, so the next message goes to the selected agent only.
+- Browser: a banner says when the dashboard can't reach optimus, instead of showing a frozen fleet as if nothing changed.
+
 ### Fixed
+- Browser: errors raised while a dialog was open (New session, Handoff) appeared behind its backdrop, blurred and unread.
+- Browser: Enter in the New session dialog's name field closed the dialog and dropped everything typed, instead of starting the session.
+- Browser: a message that failed to send was cleared anyway and reported as sent; it now stays in the box to retry.
+- Phone: tapping a key button (Esc, ↵, 1, y…) opened the on-screen keyboard over them; focusing a text field zoomed the page on iOS; a worktree agent's actions ran off the screen, hiding Stop; the Sessions table scrolled sideways. Key buttons, folder rows and the folder picker's › are now finger-sized, and keyboard-only hints are hidden on touch screens.
+- Browser: Handoff offered to hand a session into its own window, and Esc on the login dialog left an empty dashboard.
 - Every agent ran in the cgroup of whatever started the tmux server, so the out-of-memory killer (which takes whole cgroups) ended all sessions at once and they came back when the supervisor restarted — sessions "appearing and disappearing". On Linux with a reachable systemd user manager, each agent now runs in its own `optimus-agent-*.scope`, so an OOM kill ends one session and restarting the UI ends none. `OPTIMUS_NO_SCOPE=1` turns it off.
 - A window whose transcript wasn't written yet (before its first message) borrowed the newest other session in the same folder: its title, cost, transcript and handoff showed someone else's session, so two sessions in one folder looked like one. A window that knows its session id no longer guesses.
 - After `/clear`, `/resume` or a fork inside a window, the fleet kept showing the old session. The Claude hook now retags the window with the session actually running.

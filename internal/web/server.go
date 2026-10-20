@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -637,22 +638,37 @@ func (s *Server) launch(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	home, _ := os.UserHomeDir()
-	req.Dir = dirs.Expand(req.Dir, home)
-	if req.Dir == "" {
-		httpErr(w, http.StatusBadRequest, "pick a project directory")
+	dir, err := projectDir(req.Dir)
+	if err != nil {
+		httpErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if st, err := os.Stat(req.Dir); err != nil || !st.IsDir() {
-		httpErr(w, http.StatusBadRequest, "not a directory: "+req.Dir)
-		return
-	}
+	req.Dir = dir
 	id, err := s.app.LaunchWith(req)
 	if err != nil {
 		httpErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeJSON(w, map[string]string{"window": id})
+}
+
+// projectDir resolves the folder a browser asked to start in. ~ is home, and
+// so is the base of a relative path, as the folder picker completes ./ from
+// home: never the directory the dashboard happened to be started in, which
+// a person on a phone can't know.
+func projectDir(raw string) (string, error) {
+	p := strings.TrimSpace(raw)
+	if p == "" {
+		return "", errors.New("pick a project folder")
+	}
+	home, _ := os.UserHomeDir()
+	if p = dirs.Expand(p, home); !filepath.IsAbs(p) {
+		p = filepath.Join(home, p)
+	}
+	if st, err := os.Stat(p); err != nil || !st.IsDir() {
+		return "", errors.New("not a directory: " + p)
+	}
+	return p, nil
 }
 
 // window resolves the {id} path value to a live optimus window.
@@ -825,13 +841,12 @@ func (s *Server) fanout(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, "agents and a task are required")
 		return
 	}
-	home, _ := os.UserHomeDir()
-	req.Dir = dirs.Expand(req.Dir, home)
-	if st, err := os.Stat(req.Dir); err != nil || !st.IsDir() {
-		httpErr(w, http.StatusBadRequest, "not a directory: "+req.Dir)
+	dir, err := projectDir(req.Dir)
+	if err != nil {
+		httpErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	ids, err := s.app.Fanout(req.Agents, req.Dir, req.Prompt)
+	ids, err := s.app.Fanout(req.Agents, dir, req.Prompt)
 	if err != nil {
 		httpErr(w, http.StatusBadRequest, err.Error())
 		return
