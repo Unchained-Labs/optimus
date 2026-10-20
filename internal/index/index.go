@@ -56,17 +56,22 @@ func saveCache(c cacheFile) error {
 	if err := os.MkdirAll(config.CacheDir(), 0o755); err != nil {
 		return err
 	}
-	tmp := cachePath() + ".tmp"
-	f, err := os.Create(tmp)
+	// a temp file of its own: the web dashboard, the TUI and the CLI save
+	// concurrently, and a shared one interleaved their writes into a cache
+	// that failed to decode, so the next load re-read the whole history
+	f, err := os.CreateTemp(config.CacheDir(), "index-*.tmp")
 	if err != nil {
 		return err
 	}
-	if err := gob.NewEncoder(f).Encode(c); err != nil {
-		f.Close()
+	err = gob.NewEncoder(f).Encode(c)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
 		return err
 	}
-	f.Close()
-	return os.Rename(tmp, cachePath())
+	return os.Rename(f.Name(), cachePath())
 }
 
 // Load scans every provider, parsing only what changed since last time, and

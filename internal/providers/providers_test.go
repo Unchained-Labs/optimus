@@ -3,6 +3,7 @@ package providers
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -193,5 +194,36 @@ func TestAutomatedSessions(t *testing.T) {
 	}
 	if !got["nightly vault cleanup"] || got["fix the bug"] {
 		t.Errorf("automated detection: %v", got)
+	}
+}
+
+func TestProcStartField(t *testing.T) {
+	// the command name may hold spaces and parentheses
+	stat := "4242 (claude (x) y) S 1 4242 4242 0 -1 4194560 100 0 0 0 5 3 0 0 20 0 9 0 65986292 1000 200"
+	if got := procStartField(stat); got != "65986292" {
+		t.Errorf("got %q", got)
+	}
+	if got := procStartField("4242 (short) S 1"); got != "" {
+		t.Errorf("truncated stat: got %q", got)
+	}
+}
+
+func TestClaudeLiveSkipsReusedPids(t *testing.T) {
+	if _, err := os.Stat("/proc/self/stat"); err != nil {
+		t.Skip("needs /proc")
+	}
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	os.MkdirAll(filepath.Join(dir, "sessions"), 0o755)
+	me := os.Getpid()
+	st, _ := os.ReadFile("/proc/self/stat")
+	reg := func(id, procStart string) {
+		os.WriteFile(filepath.Join(dir, "sessions", id+".json"), []byte(`{"pid":`+strconv.Itoa(me)+`,"sessionId":"`+id+`","procStart":"`+procStart+`"}`), 0o644)
+	}
+	reg("mine", procStartField(string(st)))
+	reg("killed-earlier", "1") // an OOM-killed Claude's file; its pid is ours now
+	live := Claude{}.Live()
+	if len(live) != 1 || live[0].ID != "mine" {
+		t.Errorf("live: %+v", live)
 	}
 }

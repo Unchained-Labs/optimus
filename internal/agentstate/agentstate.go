@@ -50,11 +50,22 @@ func Write(r Record) error {
 		r.At = time.Now()
 	}
 	b, _ := json.Marshal(r)
-	tmp := fileFor(r.Pane) + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	// a private temp file per writer: Claude runs the hooks of parallel tool
+	// calls concurrently, and a shared one could be renamed half-written
+	f, err := os.CreateTemp(dir(), ".rec-*")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, fileFor(r.Pane))
+	_, werr := f.Write(b)
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		_ = os.Remove(f.Name())
+		return werr
+	}
+	_ = os.Chmod(f.Name(), 0o644)
+	return os.Rename(f.Name(), fileFor(r.Pane))
 }
 
 // Read returns the record for a pane, if any.
@@ -70,11 +81,25 @@ func Read(pane string) (Record, bool) {
 	return r, true
 }
 
-// Forget removes records of panes that no longer exist.
-func Forget(alive map[string]bool) {
+// Forget removes records of panes that no longer exist. listed is when the
+// panes were listed: a record written since then may belong to a window
+// created after the listing, so it is kept until the next round.
+func Forget(alive map[string]bool, listed time.Time) {
 	files, _ := filepath.Glob(filepath.Join(dir(), "*.json"))
 	for _, f := range files {
-		if !alive["%"+strings.TrimSuffix(filepath.Base(f), ".json")] {
+		if alive["%"+strings.TrimSuffix(filepath.Base(f), ".json")] {
+			continue
+		}
+		if st, err := os.Stat(f); err == nil && st.ModTime().After(listed) {
+			continue
+		}
+		_ = os.Remove(f)
+	}
+	// temp files of hooks killed mid-write (and of older versions)
+	tmps, _ := filepath.Glob(filepath.Join(dir(), ".rec-*"))
+	old, _ := filepath.Glob(filepath.Join(dir(), "*.json.tmp"))
+	for _, f := range append(tmps, old...) {
+		if st, err := os.Stat(f); err == nil && st.ModTime().Before(listed.Add(-time.Minute)) {
 			_ = os.Remove(f)
 		}
 	}
@@ -111,6 +136,10 @@ func Resolve(w mux.Window, screen string) Info {
 	}
 	switch {
 	case r.State == mux.StateBusy && scr != mux.StateBusy && time.Since(r.At) > staleBusy:
+		return Info{State: scr, Message: screenPrompt(scr, screen), Source: "screen"}
+	case r.State == mux.StateExited:
+		// the pane outlives the session it reported ending (/clear, /resume
+		// on an older Claude without SessionStart): the agent is still there
 		return Info{State: scr, Message: screenPrompt(scr, screen), Source: "screen"}
 	case r.State == mux.StateIdle && scr == mux.StateWaiting:
 		// a prompt appeared that no hook announced (e.g. a menu)

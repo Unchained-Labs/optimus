@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,7 +47,8 @@ type Server struct {
 	// PhoneURLs lists URLs reachable from other devices (set by the CLI).
 	PhoneURLs func(addr string) []string
 
-	dirs *dirs.Index // folders under home, for the new-session picker
+	dirs  *dirs.Index // folders under home, for the new-session picker
+	stats statsCache  // worktree diff stats, so a poll doesn't run git per window
 
 	mu       sync.Mutex
 	idx      *index.Index
@@ -110,6 +112,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/windows/{id}/diff", s.diff)
 	api.HandleFunc("POST /api/windows/{id}/merge", s.merge)
 	api.HandleFunc("POST /api/windows/{id}/discard", s.discard)
+	api.HandleFunc("POST /api/windows/{id}/pr", s.pullRequest)
 	api.HandleFunc("POST /api/fanout", s.fanout)
 	api.HandleFunc("POST /api/outside/{pid}/takeover", s.takeover)
 	api.HandleFunc("GET /api/usage", s.usage)
@@ -125,8 +128,38 @@ func securityHeaders(h http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Content-Security-Policy", csp(r.Host))
 		h.ServeHTTP(w, r)
 	})
+}
+
+// csp is the page's Content-Security-Policy. Any script that runs here can
+// type into an agent's terminal, so scripts load only from this server (no
+// inline script, no eval): a missed esc() renders text instead of running.
+// Styles stay inline-capable because xterm.js and the meters set them.
+// connect-src names the websocket origin too: older Safari doesn't count
+// ws:// as 'self'.
+func csp(host string) string {
+	connect := "'self'"
+	if validHost(host) {
+		connect += " ws://" + host + " wss://" + host
+	}
+	return "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+		"connect-src " + connect + "; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+}
+
+// validHost accepts a Host header made only of host-name and port characters,
+// so it can't smuggle extra directives into the policy.
+func validHost(h string) bool {
+	if h == "" || len(h) > 255 {
+		return false
+	}
+	for _, c := range h {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune(".-:[]", c)) {
+			return false
+		}
+	}
+	return true
 }
 
 // page serves the app; a ?token= link logs the browser in with a cookie.
@@ -311,7 +344,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		info := agentstate.Resolve(x, screen)
 		v := windowView{ID: x.ID, Index: x.Index, Name: x.Name, Agent: x.Agent, Cwd: x.Cwd, State: info.State, Message: info.Message, Since: info.Since, Activity: x.Activity, Created: x.Created, SessionID: x.SessionID, External: x.External}
 		if t, ok := app.Tree(x); ok {
-			st, _ := t.Stats()
+			st := s.stats.get(t)
 			v.Worktree = &treeView{Path: t.Path, Repo: t.Repo, Branch: t.Branch, Stats: st, Label: st.String()}
 		}
 		if sess := idx.ForWindow(x.Agent, x.Cwd, x.SessionID, x.Created); sess != nil {
@@ -606,24 +639,37 @@ func (s *Server) launch(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if strings.HasPrefix(req.Dir, "~") {
-		home, _ := os.UserHomeDir()
-		req.Dir = home + strings.TrimPrefix(req.Dir, "~")
-	}
-	if req.Dir == "" {
-		httpErr(w, http.StatusBadRequest, "pick a project directory")
+	dir, err := projectDir(req.Dir)
+	if err != nil {
+		httpErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if st, err := os.Stat(req.Dir); err != nil || !st.IsDir() {
-		httpErr(w, http.StatusBadRequest, "not a directory: "+req.Dir)
-		return
-	}
+	req.Dir = dir
 	id, err := s.app.LaunchWith(req)
 	if err != nil {
 		httpErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeJSON(w, map[string]string{"window": id})
+}
+
+// projectDir resolves the folder a browser asked to start in. ~ is home, and
+// so is the base of a relative path, as the folder picker completes ./ from
+// home: never the directory the dashboard happened to be started in, which
+// a person on a phone can't know.
+func projectDir(raw string) (string, error) {
+	p := strings.TrimSpace(raw)
+	if p == "" {
+		return "", errors.New("pick a project folder")
+	}
+	home, _ := os.UserHomeDir()
+	if p = dirs.Expand(p, home); !filepath.IsAbs(p) {
+		p = filepath.Join(home, p)
+	}
+	if st, err := os.Stat(p); err != nil || !st.IsDir() {
+		return "", errors.New("not a directory: " + p)
+	}
+	return p, nil
 }
 
 // window resolves the {id} path value to a live optimus window.
@@ -764,11 +810,33 @@ func (s *Server) merge(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := t.Merge(true, "optimus: work from "+win.Name+" ("+win.Agent+")"); err != nil {
+	if err := t.Merge(true, app.WorkMessage(win)); err != nil {
 		httpErr(w, http.StatusConflict, err.Error())
 		return
 	}
+	s.stats.forget(t.Path)
 	writeJSON(w, map[string]string{"merged": t.Branch, "into": t.Repo})
+}
+
+func (s *Server) pullRequest(w http.ResponseWriter, r *http.Request) {
+	win, t, ok := treeFor(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Title string `json:"title"`
+		Draft bool   `json:"draft"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		httpErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	pr, err := t.PullRequest(app.WorkMessage(win), worktree.PROptions{Title: strings.TrimSpace(req.Title), Draft: req.Draft})
+	if err != nil {
+		httpErr(w, http.StatusConflict, err.Error())
+		return
+	}
+	writeJSON(w, pr)
 }
 
 func (s *Server) discard(w http.ResponseWriter, r *http.Request) {
@@ -780,6 +848,7 @@ func (s *Server) discard(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.stats.forget(t.Path)
 	_ = mux.Kill(win.ID)
 	writeJSON(w, map[string]bool{"ok": true})
 }
@@ -794,11 +863,12 @@ func (s *Server) fanout(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, "agents and a task are required")
 		return
 	}
-	if strings.HasPrefix(req.Dir, "~") {
-		home, _ := os.UserHomeDir()
-		req.Dir = home + strings.TrimPrefix(req.Dir, "~")
+	dir, err := projectDir(req.Dir)
+	if err != nil {
+		httpErr(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	ids, err := s.app.Fanout(req.Agents, req.Dir, req.Prompt)
+	ids, err := s.app.Fanout(req.Agents, dir, req.Prompt)
 	if err != nil {
 		httpErr(w, http.StatusBadRequest, err.Error())
 		return

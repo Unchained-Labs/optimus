@@ -35,10 +35,22 @@ async function api(path, opts = {}) {
   return data;
 }
 
+// A modal dialog sits in the top layer, above any z-index, so while one is
+// open the toasts live inside it: otherwise an error from New session or
+// Handoff lands behind the backdrop, where nobody reads it.
+function homeToasts() {
+  const box = $("#toasts"), host = $("dialog[open]") || document.body;
+  if (box.parentElement !== host) host.append(box);
+}
+$$("dialog").forEach((d) => d.addEventListener("close", homeToasts));
+
 function toast(msg, err = false) {
   const t = document.createElement("div");
   t.className = "toast" + (err ? " err" : "");
   t.textContent = msg;
+  t.title = "Dismiss";
+  t.addEventListener("click", () => t.remove());
+  homeToasts();
   $("#toasts").append(t);
   setTimeout(() => t.remove(), err ? 7000 : 4000);
 }
@@ -91,10 +103,22 @@ $$("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dat
 
 async function refresh() {
   let st;
-  try { st = await api("/api/state"); } catch { return; }
+  try { st = await api("/api/state"); } catch (e) { offline(e.message !== "not connected"); return; }
+  offline(false);
   S.state = st;
   renderMeters();
   renderFleet();
+}
+
+// Without this a dead server (restarted, or the phone off the tailnet) just
+// freezes the fleet as it was, which reads as "all agents idle". One failed
+// poll is often a phone waking up, so say so from the second.
+let fails = 0, lastOK = 0;
+function offline(down) {
+  fails = down ? fails + 1 : 0;
+  if (!down) lastOK = Date.now();
+  $("#offline").hidden = fails < 2;
+  $("#offline").textContent = "Can't reach optimus" + (lastOK ? ` · last update ${dur(Date.now() - lastOK)} ago` : "") + " · retrying…";
 }
 
 function renderMeters() {
@@ -171,7 +195,7 @@ function renderFleet() {
     $("#pane-agent").textContent = w.agent;
     $("#pane-cwd").textContent = short(w.cwd);
     $("#pane-state").outerHTML = stateBadge(w.state).replace('class="state', 'id="pane-state" class="state');
-    for (const b of ["#act-diff", "#act-merge", "#act-discard"]) $(b).hidden = !w.worktree;
+    for (const b of ["#act-diff", "#act-merge", "#act-pr", "#act-discard"]) $(b).hidden = !w.worktree;
     $("#act-kill").hidden = $("#act-rename").hidden = !!w.external;
     $("#act-takeover").hidden = !w.external;
     $("#act-transcript").disabled = !w.session_id;
@@ -337,7 +361,7 @@ const KEYS = [["Esc", "Escape"], ["↵", "Enter"], ["↑", "Up"], ["↓", "Down"
 $("#keys").innerHTML = KEYS.map(([l, k]) => `<button data-key="${k}" title="${k}">${l}</button>`).join("");
 $$("#keys button").forEach((b) => b.addEventListener("click", () => {
   if (S.selected) act(() => api(`/api/windows/${encodeURIComponent(S.selected)}/keys`, { method: "POST", body: { keys: [b.dataset.key] } }));
-  term.xterm?.focus();
+  if (!isTouch) term.xterm?.focus(); // on a phone that pops the keyboard over the keys
 }));
 
 if (window.innerWidth < 760) $("#prompt").placeholder = "Message this agent…";
@@ -351,10 +375,14 @@ $("#prompt-form").addEventListener("submit", async (e) => {
   if (!text) return;
   const all = $("#broadcast").checked;
   const targets = all ? S.state.windows.filter((w) => w.state !== "exited") : S.state.windows.filter((w) => w.id === S.selected);
-  for (const w of targets) await act(() => api(`/api/windows/${encodeURIComponent(w.id)}/send`, { method: "POST", body: { text } }));
-  toast(all ? `Sent to ${targets.length} agents` : `Sent to ${targets[0]?.name}`);
+  if (!targets.length) return toast("No running agent to send to", true);
+  let sent = 0;
+  for (const w of targets) if (await act(() => api(`/api/windows/${encodeURIComponent(w.id)}/send`, { method: "POST", body: { text } }))) sent++;
+  if (!sent) return; // the error toast says why; keep the text so it can be retried
+  toast(all ? `Sent to ${sent === targets.length ? "" : sent + " of "}${targets.length} agents` : `Sent to ${targets[0].name}`);
   $("#prompt").value = "";
   $("#prompt").style.height = "auto";
+  $("#broadcast").checked = false; // one broadcast at a time: the next message goes to this agent only
 });
 
 $("#pane-link").addEventListener("click", () => checkLink(true));
@@ -398,6 +426,22 @@ function mergeWin(w) {
   if (w && confirm(`Commit and merge ${w.name}'s work (${w.worktree.label}) into ${short(w.worktree.repo)}?`))
     act(() => api(`/api/windows/${encodeURIComponent(w.id)}/merge`, { method: "POST", body: {} }), (r) => `Merged ${r.merged} into ${short(r.into)}`);
 }
+
+// Pull request: push the agent's branch and open a PR (gh on the host), or
+// get the forge's page to open one. A blank title takes it from the commits.
+$("#act-pr").addEventListener("click", async () => {
+  const w = selectedWin();
+  if (!w) return;
+  const title = prompt(`Push ${w.worktree.branch} and open a pull request.\nTitle (blank: from the commits):`, "");
+  if (title === null) return;
+  // open the tab now, while the click still counts: after the push, a popup
+  // blocker would stop it
+  const tab = window.open("", "_blank");
+  if (tab) tab.opener = null;
+  const r = await act(() => api(`/api/windows/${encodeURIComponent(w.id)}/pr`, { method: "POST", body: { title } }),
+    (r) => r.opened ? `Pull request opened into ${r.base}` : `Pushed ${r.branch}${r.note ? ": " + r.note : ""}`);
+  if (tab) r?.url ? tab.location.replace(r.url) : tab.close();
+});
 
 async function openDiff(w) {
   if (!w) return;
@@ -463,7 +507,7 @@ function openNew({ agent, dir } = {}) {
 // shell. Tab opens the highlighted folder, Enter picks it.
 const dirPick = (() => {
   const input = $("#new-dir"), list = $("#new-dirs");
-  let items = [], on = -1, mode = "search", seq = 0, timer;
+  let items = [], on = -1, mode = "search", seq = 0, timer, lastQ = "";
   const open = (yes) => { list.hidden = !yes; input.setAttribute("aria-expanded", String(yes)); };
   const render = () => {
     if (!items.length) {
@@ -482,7 +526,7 @@ const dirPick = (() => {
     try {
       const r = await api(`/api/dirs?q=${encodeURIComponent(q)}`);
       if (mine !== seq) return; // a newer keystroke won
-      items = r.dirs; mode = r.mode; on = items.length ? 0 : -1;
+      items = r.dirs; mode = r.mode; lastQ = q; on = items.length ? 0 : -1;
       if (document.activeElement === input) render();
     } catch { /* offline: the field still takes a typed path */ }
   };
@@ -517,7 +561,16 @@ const dirPick = (() => {
     const it = e.target.closest(".dir-item");
     if (it) pick(+it.dataset.i);
   });
-  return { close: () => { seq++; open(false); } };
+  return {
+    close: () => { seq++; open(false); },
+    // What Start launches. A search term nobody picked from ("optim", then
+    // Ctrl+Enter) means the highlighted match, the same as Enter would pick;
+    // anything typed as a path goes as it is.
+    value: () => {
+      const v = input.value.trim();
+      return mode === "search" && v && v === lastQ && !/^[~/.]/.test(v) && items[on] ? short(items[on].path) : v;
+    },
+  };
 })();
 
 $("#new-btn").addEventListener("click", () => openNew());
@@ -531,11 +584,15 @@ $("#new-fan").addEventListener("change", () => {
 });
 $("#new-form").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#new-go").click(); }
+  // Enter in a one-line field submits through the form's first button, Cancel,
+  // and throws the dialog away; start instead (the folder field handles its own)
+  else if (e.key === "Enter" && e.target.tagName === "INPUT" && !e.defaultPrevented && !e.isComposing) { e.preventDefault(); $("#new-go").click(); }
 });
 $("#new-form").addEventListener("submit", async (e) => {
   if (e.submitter?.value !== "go") return;
   e.preventDefault();
-  const dir = $("#new-dir").value.trim(), prompt = $("#new-prompt").value.trim();
+  const dir = dirPick.value(), prompt = $("#new-prompt").value.trim();
+  $("#new-dir").value = dir;
   $("#new-go").disabled = true;
   let r;
   if ($("#new-fan").checked) {
@@ -634,7 +691,7 @@ function openHandoff(s) {
   $("#handoff-what").textContent = `From “${s.title}” (${short(s.cwd)}). The receiving agent gets a document with the goal, files touched, recent conversation and where it left off.`;
   const targets = [];
   for (const a of st.agents.filter((x) => x.installed && x.name !== "shell")) targets.push([`new:${a.name}`, `New <b class="ag-${esc(a.name)}">${esc(a.name)}</b> session`, `in ${esc(short(s.cwd))}`]);
-  for (const w of st.windows.filter((x) => x.state !== "exited")) targets.push([`win:${w.id}`, `Into ${esc(w.name)}`, `${esc(w.agent)} · running`]);
+  for (const w of st.windows.filter((x) => x.state !== "exited" && x.session_id !== s.id)) targets.push([`win:${w.id}`, `Into ${esc(w.name)}`, `${esc(w.agent)} · running`]);
   targets.push(["file", "Save document", "and copy it"]);
   $("#handoff-targets").innerHTML = targets.map(([v, l, d]) => `<button type="button" data-t="${esc(v)}"><span>${l}</span><span class="dim">${d}</span></button>`).join("");
   $$("#handoff-targets button").forEach((b) => b.addEventListener("click", () => doHandoff(b.dataset.t)));
@@ -715,6 +772,8 @@ function meter(label, frac, val) {
 function showLogin() {
   if (!$("#dlg-login").open) $("#dlg-login").showModal();
 }
+// Esc would leave an empty dashboard that can't load anything
+$("#dlg-login").addEventListener("cancel", (e) => e.preventDefault());
 $("#login-form").addEventListener("submit", (e) => {
   e.preventDefault();
   location.href = "/?token=" + encodeURIComponent($("#login-token").value.trim());

@@ -5,11 +5,23 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- `.worktreeinclude`: list the gitignored files a fresh worktree needs (`.env`, local config, certificates) in `.gitignore` syntax, and every agent worktree gets a copy from your main checkout. Only files git ignores are copied. It's the file Claude Code and Conductor already read, so repositories set up for them work as they are.
+- Open a pull request from an agent's worktree: `optimus wt pr W [--title T] [--draft]`, **PR** in the browser, `POST /api/windows/{id}/pr`. It commits pending work, pushes the branch and opens a pull request into the branch Merge would land in, with the GitHub CLI if it's installed; otherwise it gives the GitHub, GitLab or Bitbucket page that opens one.
 - New-session folder picker that finds every project under your home folder, not only folders that already have sessions: git repos and folders with a project manifest (crawled in the background, cached, skipping dependencies and build output), ranked by name match and agent history. Type `~/` or `/` to browse like a shell; ↑↓ to choose, Enter to pick, Tab or › to open a folder. `GET /api/dirs?q=`.
 - The terminal dashboard's new-session folder picker (`n`) uses the same search: every project under home, not only folders with past sessions, ranked the same way; `~/`, `/` or `./` browse, Tab opens the highlighted folder, and the typed folder itself is the first row.
 - `optimus <command> -h` and `optimus help <command>` show that command's usage and flags. Before, `-h` printed nothing, and a mistyped flag printed only the error.
 
+### Changed
+- Browser: a folder typed relative (`dev/app`) is found from your home folder, as the picker completes it, not from wherever the dashboard was started; starting with a search term you didn't pick from (`optim`, then Ctrl+Enter) uses the highlighted match.
+- Browser: the message box's **all** (broadcast) unticks after each broadcast, so the next message goes to the selected agent only.
+- Browser: a banner says when the dashboard can't reach optimus, instead of showing a frozen fleet as if nothing changed.
+
 ### Fixed
+- Browser: errors raised while a dialog was open (New session, Handoff) appeared behind its backdrop, blurred and unread.
+- Browser: Enter in the New session dialog's name field closed the dialog and dropped everything typed, instead of starting the session.
+- Browser: a message that failed to send was cleared anyway and reported as sent; it now stays in the box to retry.
+- Phone: tapping a key button (Esc, ↵, 1, y…) opened the on-screen keyboard over them; focusing a text field zoomed the page on iOS; a worktree agent's actions ran off the screen, hiding Stop; the Sessions table scrolled sideways. Key buttons, folder rows and the folder picker's › are now finger-sized, and keyboard-only hints are hidden on touch screens.
+- Browser: Handoff offered to hand a session into its own window, and Esc on the login dialog left an empty dashboard.
 - Every agent ran in the cgroup of whatever started the tmux server, so the out-of-memory killer (which takes whole cgroups) ended all sessions at once and they came back when the supervisor restarted — sessions "appearing and disappearing". On Linux with a reachable systemd user manager, each agent now runs in its own `optimus-agent-*.scope`, so an OOM kill ends one session and restarting the UI ends none. `OPTIMUS_NO_SCOPE=1` turns it off.
 - A window whose transcript wasn't written yet (before its first message) borrowed the newest other session in the same folder: its title, cost, transcript and handoff showed someone else's session, so two sessions in one folder looked like one. A window that knows its session id no longer guesses.
 - After `/clear`, `/resume` or a fork inside a window, the fleet kept showing the old session. The Claude hook now retags the window with the session actually running.
@@ -20,6 +32,24 @@ All notable changes to this project are documented here. The format follows [Kee
 - `optimus new`, `resume`, `takeover`, `handoff --to` and the agent shortcuts reported tmux's window id (`@3`) while `optimus ps` and the dashboard show window numbers; they now print the number and name, and how to attach.
 - `optimus kill` and `peek` without a window said `no optimus window ""`; they now show their usage, and every window command given an unknown window points to `optimus ps`.
 - Docs: per-agent systemd scopes and `OPTIMUS_NO_SCOPE`, the folder search, the resume guard, windows following `/clear` and `/resume`, the dashboard keys missing from the key table, and agents outside optimus (the FAQ still said they couldn't be driven).
+- The notifier lock was dropped at the first garbage collection (nothing kept its file open), so every dashboard, TUI and `optimus watch` ran its own watcher: duplicate notifications, and each one polling tmux every two seconds. The lock now lasts as long as the process.
+- `/api/state` ran three git commands per worktree window on every poll (every open tab, every 2.5 s). Worktree diff stats are now reused for 10 s and dropped on merge or discard: with three worktree windows a poll went from 160 ms to 52 ms (median) and from ~180 ms to ~95 ms of CPU.
+- A launch or fan-out folder typed as `~name` became `$HOME` + `name` (a sibling of your home folder); `~` now only means your home folder, and fan-out checks the folder exists like launch does.
+
+### Security
+- The dashboard sends a Content-Security-Policy: scripts only from the dashboard itself (no inline script, no eval), no plugins, no framing, connections only back to the dashboard. Any script running in the page can type into an agent's terminal, so this is the backstop for a missed escape in rendered transcript text.
+- External pane ids (`ext:<socket>:<pane>`) arrive in API URLs and were joined to the tmux directory as given, so an encoded `../` could point `tmux -S` at any socket path. A socket must now be a plain name in your tmux directory and a pane a `%N` id; anything else is refused instead of falling through to the optimus server.
+- Handoff documents quote the conversation (pasted keys included) but were written world-readable (`0644` in a `0755` folder); they are now `0600` in a `0700` folder, and an existing folder is tightened.
+- The installer installed a release binary without verification when `checksums.txt` could not be downloaded; a missing checksum now aborts the install like a wrong one.
+- Taking over an agent always failed with "already running … take it over instead": the stopped agent was still in the 2-second process cache when its session resumed. Exited agents now leave the list at once, and take-over checks the pid still belongs to that agent before signalling it.
+- After `/clear` or `/resume`, a window showed *exited* and kept the old session until its next prompt. The Claude hook now also listens for `SessionStart`, ignores the `SessionEnd` of a `/clear`, and a live window is never shown as exited.
+- A Claude killed outright (out of memory, SIGKILL) left its `~/.claude/sessions/<pid>.json` behind, and once the pid was reused that dead session showed as running, or was pinned on another Claude. Entries now count only while the process start time matches.
+- Resuming a session whose folder is gone (a discarded worktree, a deleted checkout) ran the agent in the dashboard's folder, where Claude refuses with "This conversation is from a different directory". The folder is recreated, empty, and the session resumes there.
+- Resuming a session that ran in an agent worktree after its window closed lost the worktree: no diff, merge or discard. The worktree is re-attached to the new window.
+- Resuming the same session twice at once (a double click, a phone retry) started two agents on one transcript; two launches at once on a stopped multiplexer failed with "duplicate session".
+- Codex and opencode windows in one folder, before the agent reported a session id, showed whichever session was newest. Each window now gets the first session that started after it opened.
+- Concurrent saves from the web dashboard, the terminal dashboard and the CLI could tear the session cache, so the next start re-read the whole history. Concurrent hook writes (parallel tool calls) could tear an agent's state record, and the watcher could drop the record of a window opened while it was polling.
+- Per-agent scopes failed, and the agent died at start, when the tmux server had been started without `XDG_RUNTIME_DIR` (from cron, or over ssh without a login session).
 
 ## [0.3.0] - 2026-10-04
 

@@ -10,6 +10,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/worktree"
 )
 
 func treeOf(q string) (mux.Window, error) {
@@ -23,7 +24,7 @@ func treeOf(q string) (mux.Window, error) {
 	return w, nil
 }
 
-// cmdWorktree: optimus wt ls | diff W | merge W [--commit] | rm W [--force]
+// cmdWorktree: optimus wt ls | diff W | merge W [--commit] | pr W | rm W [--force]
 func cmdWorktree(args []string) error {
 	sub := first(args)
 	rest := args
@@ -53,10 +54,34 @@ func cmdWorktree(args []string) error {
 			return err
 		}
 		t, _ := app.Tree(w)
-		if err := t.Merge(*commit, "optimus: work from "+w.Name+" ("+w.Agent+")"); err != nil {
+		if err := t.Merge(*commit, app.WorkMessage(w)); err != nil {
 			return err
 		}
 		fmt.Printf("merged %s into %s\n", t.Branch, sp(t.Repo))
+		return nil
+	case "pr":
+		fs := flag.NewFlagSet("pr", flag.ExitOnError)
+		title := fs.String("title", "", "pull request title (default: from the commits)")
+		draft := fs.Bool("draft", false, "open it as a draft")
+		pos := parse(fs, rest)
+		w, err := treeOf(first(pos))
+		if err != nil {
+			return err
+		}
+		t, _ := app.Tree(w)
+		pr, err := t.PullRequest(app.WorkMessage(w), worktree.PROptions{Title: *title, Draft: *draft, Interactive: true})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("pushed %s to %s\n", pr.Branch, pr.Remote)
+		switch {
+		case pr.Opened:
+			fmt.Printf("pull request into %s: %s\n", pr.Base, pr.URL)
+		case pr.URL != "":
+			fmt.Printf("%s\nopen the pull request into %s: %s\n", pr.Message, pr.Base, pr.URL)
+		default:
+			fmt.Println(pr.Message)
+		}
 		return nil
 	case "rm", "remove":
 		fs := flag.NewFlagSet("wt rm", flag.ExitOnError)
@@ -77,7 +102,7 @@ func cmdWorktree(args []string) error {
 		fmt.Printf("removed %s and branch %s\n", sp(t.Path), t.Branch)
 		return nil
 	}
-	return fmt.Errorf("usage: optimus wt [ls | diff W | merge W [--commit] | rm W [--force]]")
+	return fmt.Errorf("usage: optimus wt [ls | diff W | merge W [--commit] | pr W [--title T] [--draft] | rm W [--force]]")
 }
 
 // cmdCompare lists agents working in worktrees side by side.

@@ -50,14 +50,18 @@ func (a *App) TakeOver(idx *index.Index, ag outside.Agent, force bool) (string, 
 	if ag.Status == "busy" && !force {
 		return "", errors.New("it's in the middle of a turn; stopping it now would cut that turn short (force to do it anyway, or wait until it's idle)")
 	}
-	if err := syscall.Kill(ag.PID, syscall.SIGTERM); err != nil {
-		return "", fmt.Errorf("couldn't stop pid %d: %w", ag.PID, err)
-	}
-	for i := 0; i < 100 && outside.Alive(ag.PID); i++ {
-		time.Sleep(100 * time.Millisecond)
-	}
-	if outside.Alive(ag.PID) {
-		return "", fmt.Errorf("pid %d didn't exit after 10s; close it yourself (e.g. /exit) and run this again", ag.PID)
+	// the pid is checked to still be that agent: one that exited meanwhile
+	// just resumes, and a pid since reused by another program isn't signalled
+	if outside.Same(ag) {
+		if err := syscall.Kill(ag.PID, syscall.SIGTERM); err != nil {
+			return "", fmt.Errorf("couldn't stop pid %d: %w", ag.PID, err)
+		}
+		for i := 0; i < 100 && outside.Same(ag); i++ {
+			time.Sleep(100 * time.Millisecond)
+		}
+		if outside.Same(ag) {
+			return "", fmt.Errorf("pid %d didn't exit after 10s; close it yourself (e.g. /exit) and run this again", ag.PID)
+		}
 	}
 	return a.Resume(s)
 }

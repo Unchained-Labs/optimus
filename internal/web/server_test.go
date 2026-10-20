@@ -19,6 +19,7 @@ import (
 	"github.com/Unchained-Labs/optimus/internal/agentstate"
 	"github.com/Unchained-Labs/optimus/internal/app"
 	"github.com/Unchained-Labs/optimus/internal/mux"
+	"github.com/Unchained-Labs/optimus/internal/worktree"
 )
 
 // setup isolates config, agent history and the tmux server.
@@ -91,6 +92,20 @@ func TestAuth(t *testing.T) {
 	if resp, _ := c.Do(req); resp.StatusCode != http.StatusForbidden {
 		t.Errorf("cross-origin POST: %d", resp.StatusCode)
 	}
+	// another app on the same host shares loopback cookies (they ignore the
+	// port) and SameSite: only the Origin check keeps it from driving agents
+	req, _ = http.NewRequest("POST", ts.URL+"/api/windows", strings.NewReader(`{}`))
+	req.Header.Set("Origin", "http://127.0.0.1:1")
+	if resp, _ := c.Do(req); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("other-port POST: %d", resp.StatusCode)
+	}
+	// and a cross-origin websocket never opens a terminal
+	u := strings.Replace(ts.URL, "http", "ws", 1) + "/api/term/@1"
+	h := http.Header{"Origin": {"https://evil.example"}}
+	if ws, _, err := websocket.Dial(context.Background(), u, &websocket.DialOptions{HTTPClient: c, HTTPHeader: h}); err == nil {
+		ws.CloseNow()
+		t.Error("cross-origin websocket accepted")
+	}
 	// bearer header works for scripts
 	req, _ = http.NewRequest("GET", ts.URL+"/api/sessions", nil)
 	req.Header.Set("Authorization", "Bearer "+s.token)
@@ -116,6 +131,99 @@ func TestLaunchValidation(t *testing.T) {
 	}
 	if code, msg := post(`{"agent":"nope","dir":"/tmp"}`); code != 400 || !strings.Contains(msg, "unknown agent") {
 		t.Errorf("bad agent: %d %s", code, msg)
+	}
+	// "~x" is not "$HOME" + "x": a sibling of home must not be reachable that way
+	home := t.TempDir() + "/home"
+	os.MkdirAll(home+"nope", 0o755)
+	t.Setenv("HOME", home)
+	if code, msg := post(`{"agent":"shell","dir":"~nope"}`); code != 400 || !strings.Contains(msg, "not a directory") {
+		t.Errorf("~nope: %d %s", code, msg)
+	}
+	resp, _ := c.Post(ts.URL+"/api/fanout", "application/json", strings.NewReader(`{"agents":["shell"],"dir":"/definitely/not/here","prompt":"x"}`))
+	if resp.StatusCode != 400 {
+		t.Errorf("fanout bad dir: %d", resp.StatusCode)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	ts, _ := setup(t)
+	for _, p := range []string{"/", "/static/app.js", "/api/state"} {
+		resp, err := http.Get(ts.URL + p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := resp.Header.Get("Content-Security-Policy")
+		host := strings.TrimPrefix(ts.URL, "http://")
+		for _, want := range []string{"script-src 'self';", "frame-ancestors 'none'", "object-src 'none'", "ws://" + host} {
+			if !strings.Contains(c, want) {
+				t.Errorf("%s: CSP %q lacks %q", p, c, want)
+			}
+		}
+		if d := strings.Split(strings.Split(c, "script-src")[1], ";")[0]; strings.Contains(d, "unsafe") {
+			t.Errorf("%s: scripts may run inline: %q", p, c)
+		}
+		if resp.Header.Get("X-Frame-Options") != "DENY" || resp.Header.Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s: headers %v", p, resp.Header)
+		}
+	}
+	// a forged Host can't add directives
+	if c := csp("x; script-src *"); strings.Contains(c, "*") {
+		t.Errorf("host injected into CSP: %q", c)
+	}
+}
+
+func TestStatsCache(t *testing.T) {
+	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@x"} {
+		t.Setenv(k, v)
+	}
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"commit", "-q", "--allow-empty", "-m", "init"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("%v %s", err, out)
+		}
+	}
+	tr := worktree.Tree{Repo: repo, Path: repo, Base: "HEAD"}
+	var c statsCache
+	if st := c.get(tr); st.Untracked != 0 {
+		t.Fatalf("fresh repo: %+v", st)
+	}
+	os.WriteFile(repo+"/a", []byte("x"), 0o644)
+	if st := c.get(tr); st.Untracked != 0 {
+		t.Errorf("second poll ran git again: %+v", st)
+	}
+	c.forget(repo)
+	if st := c.get(tr); st.Untracked != 1 {
+		t.Errorf("forget didn't refresh: %+v", st)
+	}
+	old := statsTTL
+	statsTTL = 0
+	defer func() { statsTTL = old }()
+	os.WriteFile(repo+"/b", []byte("x"), 0o644)
+	if st := c.get(tr); st.Untracked != 2 {
+		t.Errorf("expired entry reused: %+v", st)
+	}
+}
+
+// TestProjectDir: a folder typed in the browser is found from home, whatever
+// directory the dashboard was started in.
+func TestProjectDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	os.MkdirAll(filepath.Join(home, "dev", "app"), 0o755)
+	os.WriteFile(filepath.Join(home, "notes"), nil, 0o644)
+	want := filepath.Join(home, "dev", "app")
+	for _, in := range []string{"~/dev/app", " ~/dev/app/ ", "dev/app", "./dev/app", want} {
+		if got, err := projectDir(in); err != nil || got != want {
+			t.Errorf("%q: %q %v", in, got, err)
+		}
+	}
+	if got, err := projectDir("~"); err != nil || got != home {
+		t.Errorf("~: %q %v", got, err)
+	}
+	for _, in := range []string{"", "  ", "~/nope", "notes", "~dev/app"} {
+		if got, err := projectDir(in); err == nil {
+			t.Errorf("%q accepted as %q", in, got)
+		}
 	}
 }
 
@@ -268,6 +376,22 @@ func TestWorktreeFlow(t *testing.T) {
 	if !strings.Contains(d["diff"], "+# hi") {
 		t.Fatalf("diff: %q", d["diff"])
 	}
+	// publish it: the remote is a local bare repository, so the branch is
+	// pushed but no forge can open a pull request (gh, if installed, can't
+	// either: it doesn't know the host)
+	origin := t.TempDir() + "/origin.git"
+	for _, args := range [][]string{{"init", "-q", "--bare", origin}, {"-C", repo, "remote", "add", "origin", origin}} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("%v %s", err, out)
+		}
+	}
+	pr := post("/api/windows/"+id+"/pr", `{}`)
+	if pr["branch"] != w.Branch || pr["base"] != "main" || pr["opened"] != false {
+		t.Fatalf("pr: %v", pr)
+	}
+	if out, err := exec.Command("git", "-C", origin, "rev-parse", "--verify", "-q", w.Branch).CombinedOutput(); err != nil {
+		t.Fatalf("branch not pushed: %s", out)
+	}
 	post("/api/windows/"+id+"/merge", `{}`)
 	if b, _ := os.ReadFile(repo + "/README.md"); string(b) != "# hi\n" {
 		t.Fatal("merge did not reach the main checkout")
@@ -306,6 +430,13 @@ func TestHandoffPreviewAndEdit(t *testing.T) {
 	r := post(`{"target":"file","document":"# my edited brief\n"}`)
 	if b, _ := os.ReadFile(r["path"]); string(b) != "# my edited brief\n" {
 		t.Fatalf("edited document not used: %q", b)
+	}
+	// it quotes the conversation, so only you may read it
+	if st, err := os.Stat(r["path"]); err != nil || st.Mode().Perm() != 0o600 {
+		t.Errorf("handoff file mode: %v %v", st.Mode(), err)
+	}
+	if st, _ := os.Stat(filepath.Dir(r["path"])); st.Mode().Perm() != 0o700 {
+		t.Errorf("handoff dir mode: %v", st.Mode())
 	}
 }
 

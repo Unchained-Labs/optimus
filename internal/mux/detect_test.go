@@ -46,7 +46,7 @@ func TestScoped(t *testing.T) {
 	}
 	scopesAvailable = func() bool { return true }
 	got := scoped([]string{"claude", "--resume", "x"})
-	if got[0] != "systemd-run" || got[len(got)-4] != "--" || got[len(got)-3] != "claude" {
+	if got[2] != "systemd-run" || got[len(got)-4] != "--" || got[len(got)-3] != "claude" {
 		t.Fatalf("got %v", got)
 	}
 	if a, b := scoped([]string{"x"}), scoped([]string{"x"}); strings.Join(a, " ") == strings.Join(b, " ") {

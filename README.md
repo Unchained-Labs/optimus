@@ -26,7 +26,7 @@ See what they cost, how much quota is left, and hand context from one session to
 - **Terminal, browser, phone:** a keyboard-driven dashboard, plus a web dashboard with live interactive terminals that works on a phone. Remote control is on by default.
 - **Bring in agents started elsewhere:** link agents running in your own tmux, or take over one from a terminal tab and continue the same session in optimus.
 - **Every session, every agent:** a searchable history with transcripts, tokens and cost. Resume any session.
-- **Parallel without collisions:** give each agent its own git worktree, or fan a task out to several agents and merge the best result.
+- **Parallel without collisions:** give each agent its own git worktree (your `.env` comes along), or fan a task out to several agents, then merge the best result or open a pull request.
 - **Context that travels:** hand a session's goal, changed files and recent conversation to a new agent (Claude → Codex works) or to one that's already running.
 - **Costs and quota:** daily and weekly spend, the current 5-hour block, real Claude and Codex 5h / 7d quota, and budgets.
 

@@ -405,13 +405,44 @@ func (Claude) Live() []LiveSession {
 			Cwd       string `json:"cwd"`
 			Name      string `json:"name"`
 			Status    string `json:"status"`
+			ProcStart string `json:"procStart"`
 		}
 		// written lazily: until the session exists there's no id yet
-		if json.Unmarshal(b, &v) != nil || v.SessionID == "" || !pidAlive(v.PID) {
+		if json.Unmarshal(b, &v) != nil || v.SessionID == "" || !RegistryAlive(v.PID, v.ProcStart) {
 			continue
 		}
 		out = append(out, LiveSession{Agent: "claude", ID: v.SessionID, PID: v.PID, Cwd: v.Cwd, Name: v.Name, Status: v.Status})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].PID < out[j].PID })
 	return out
+}
+
+// RegistryAlive reports whether the process a Claude registry entry
+// (~/.claude/sessions/<pid>.json) was written by still runs. The file of a
+// killed Claude (OOM, SIGKILL) stays behind; once the kernel hands its pid to
+// another program, the pid alone would mark that dead session running.
+// procStart is the process start time Claude records (/proc/<pid>/stat
+// field 22), compared where it can be read.
+func RegistryAlive(pid int, procStart string) bool {
+	if !pidAlive(pid) {
+		return false
+	}
+	if procStart == "" {
+		return true
+	}
+	st, err := os.ReadFile("/proc/" + itoa(int64(pid)) + "/stat")
+	if err != nil {
+		return true // no procfs (macOS): the pid is all there is
+	}
+	return procStartField(string(st)) == procStart
+}
+
+// procStartField is field 22 (starttime) of a /proc/<pid>/stat line; the
+// command name in field 2 may hold spaces and parentheses.
+func procStartField(stat string) string {
+	f := strings.Fields(stat[strings.LastIndexByte(stat, ')')+1:])
+	if len(f) < 20 {
+		return ""
+	}
+	return f[19]
 }
