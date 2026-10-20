@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,5 +135,59 @@ func TestScanFindsAgentsInYourTmux(t *testing.T) {
 	}
 	if err := mux.Kill(ws[0].ID); err == nil {
 		t.Error("optimus must refuse to stop an agent in your own tmux")
+	}
+}
+
+// A take-over stops the agent and resumes its session within the 2 s the
+// scan is cached: the stopped agent must not still claim the session, or the
+// resume refuses ("already running in a terminal tab").
+func TestScanDropsAgentsThatExited(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("needs /proc")
+	}
+	mux.Socket = fmt.Sprintf("optimus-none-%d", time.Now().UnixNano()) // no server
+	t.Setenv("TMUX_TMPDIR", t.TempDir())
+	gone := exec.Command("true")
+	if err := gone.Run(); err != nil {
+		t.Skip(err)
+	}
+	me := os.Getpid()
+	cacheMu.Lock()
+	cached, cacheAt = []Agent{
+		{PID: gone.Process.Pid, Agent: "claude", SessionID: "stopped"},
+		{PID: me, Agent: "claude", SessionID: "reused", Started: startTime(me).Add(-time.Hour)}, // pid now held by another program
+		{PID: me, Agent: "claude", SessionID: "running", Started: startTime(me)},
+	}, time.Now()
+	cacheMu.Unlock()
+	defer func() { cacheMu.Lock(); cached, cacheAt = nil, time.Time{}; cacheMu.Unlock() }()
+	var got []string
+	for _, a := range Scan(nil) {
+		got = append(got, a.SessionID)
+	}
+	if len(got) != 1 || got[0] != "running" {
+		t.Fatalf("got %v, want only the agent still running", got)
+	}
+}
+
+func TestClaudeRegistryIgnoresReusedPids(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("needs /proc")
+	}
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	os.MkdirAll(filepath.Join(dir, "sessions"), 0o755)
+	me := os.Getpid()
+	st, _ := os.ReadFile(fmt.Sprintf("/proc/%d/stat", me))
+	f := strings.Fields(string(st)[strings.LastIndexByte(string(st), ')')+1:])
+	write := func(procStart string) {
+		os.WriteFile(filepath.Join(dir, "sessions", fmt.Sprintf("%d.json", me)), []byte(fmt.Sprintf(`{"pid":%d,"sessionId":"s1","cwd":"/w","procStart":%q}`, me, procStart)), 0o644)
+	}
+	write(f[19])
+	if l, ok := claudeLive()[me]; !ok || l.SessionID != "s1" {
+		t.Fatalf("own entry not read: %+v", l)
+	}
+	write("1") // left by a killed Claude whose pid is now ours
+	if l, ok := claudeLive()[me]; ok {
+		t.Fatalf("stale entry of a reused pid was trusted: %+v", l)
 	}
 }

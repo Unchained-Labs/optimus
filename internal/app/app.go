@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Unchained-Labs/optimus/internal/config"
@@ -130,9 +132,7 @@ func (a *App) LaunchWith(r LaunchRequest) (string, error) {
 		return "", err
 	}
 	if tree != nil {
-		for k, v := range map[string]string{"@optimus_worktree": tree.Path, "@optimus_repo": tree.Repo, "@optimus_base": tree.Base, "@optimus_branch": tree.Branch} {
-			mux.SetWindowOption(id, k, v)
-		}
+		tagTree(id, *tree)
 	}
 	a.EnsureWeb()
 	if prompt != "" && argPrompt == "" {
@@ -182,6 +182,10 @@ func (a *App) Fanout(agents []string, dir, prompt string) ([]string, error) {
 // Resume reopens an existing session in the multiplexer, or returns the
 // window it is already running in.
 func (a *App) Resume(s *model.Session) (string, error) {
+	// a double click (or a phone retrying) must not start two processes on
+	// one transcript: the check and the spawn happen as one step
+	resumeMu.Lock()
+	defer resumeMu.Unlock()
 	if ws, _ := mux.List(); ws != nil {
 		for _, w := range ws {
 			if w.SessionID == s.ID && !w.Dead {
@@ -206,15 +210,43 @@ func (a *App) Resume(s *model.Session) (string, error) {
 		return "", fmt.Errorf("%s does not support resuming sessions", s.Agent)
 	}
 	argv := append(append([]string{bin}, extra...), ra...)
-	dir := s.Cwd
-	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
-		dir, _ = os.Getwd()
-	}
+	dir := resumeDir(s.Cwd)
 	id, err := mux.Spawn(name, s.Agent, dir, s.ID, argv)
-	if err == nil {
-		a.EnsureWeb()
+	if err != nil {
+		return "", err
 	}
-	return id, err
+	// its window was the only record of the worktree: re-attach it, so the
+	// work can still be diffed, merged or discarded
+	if t, ok := worktree.Of(dir); ok {
+		tagTree(id, t)
+	}
+	a.EnsureWeb()
+	return id, nil
+}
+
+func tagTree(id string, t worktree.Tree) {
+	for k, v := range map[string]string{"@optimus_worktree": t.Path, "@optimus_repo": t.Repo, "@optimus_base": t.Base, "@optimus_branch": t.Branch} {
+		mux.SetWindowOption(id, k, v)
+	}
+}
+
+var resumeMu sync.Mutex
+
+// resumeDir is where a session resumes: the folder it ran in, recreated
+// (empty) when it was deleted, e.g. a discarded worktree. Claude only resumes
+// a conversation from its own folder ("This conversation is from a different
+// directory"), and any agent started elsewhere would work on the wrong files.
+func resumeDir(cwd string) string {
+	if filepath.IsAbs(cwd) {
+		if st, err := os.Stat(cwd); err == nil && st.IsDir() {
+			return cwd
+		}
+		if os.MkdirAll(cwd, 0o755) == nil {
+			return cwd
+		}
+	}
+	wd, _ := os.Getwd()
+	return wd
 }
 
 // WebRunning reports whether the web dashboard answers on its address.

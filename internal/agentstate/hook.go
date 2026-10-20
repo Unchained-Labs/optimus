@@ -18,6 +18,8 @@ func FromClaude(payload []byte) (Record, bool) {
 		Tool      string          `json:"tool_name"`
 		Cwd       string          `json:"cwd"`
 		ToolInput json.RawMessage `json:"tool_input"`
+		Source    string          `json:"source"` // SessionStart: startup, resume, clear, compact
+		Reason    string          `json:"reason"` // SessionEnd: clear, logout, prompt_input_exit, …
 	}
 	if json.Unmarshal(payload, &p) != nil {
 		return Record{}, false
@@ -43,7 +45,18 @@ func FromClaude(payload []byte) (Record, bool) {
 	case "Stop":
 		r.State = mux.StateIdle
 		r.Message = "finished"
+	case "SessionStart":
+		// fires with the new id right after /clear or /resume, so the window
+		// is retagged before its next prompt; a compaction keeps the id and
+		// may happen mid-turn, so it changes nothing
+		if p.Source == "compact" {
+			return r, false
+		}
+		r.State = mux.StateIdle
 	case "SessionEnd":
+		if p.Reason == "clear" {
+			return r, false // the process goes on with a new session
+		}
 		r.State = mux.StateExited
 	default:
 		return r, false
@@ -119,6 +132,7 @@ func ClaudeSettings(optimusBin string) string {
 		"PermissionRequest": entry(true),
 		"Notification":      entry(false),
 		"Stop":              entry(false),
+		"SessionStart":      entry(false),
 		"SessionEnd":        entry(false),
 	}
 	b, _ := json.Marshal(map[string]any{"hooks": hooks})

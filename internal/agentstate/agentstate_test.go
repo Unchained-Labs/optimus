@@ -2,7 +2,9 @@ package agentstate
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +26,11 @@ func TestFromClaude(t *testing.T) {
 		{`{"hook_event_name":"Notification","message":"Claude is waiting for your input"}`, mux.StateIdle, "Claude is waiting for your input", true},
 		{`{"hook_event_name":"Stop"}`, mux.StateIdle, "finished", true},
 		{`{"hook_event_name":"SessionEnd"}`, mux.StateExited, "", true},
+		{`{"hook_event_name":"SessionEnd","reason":"prompt_input_exit"}`, mux.StateExited, "", true},
+		{`{"hook_event_name":"SessionEnd","reason":"clear","session_id":"old"}`, "", "", false},
+		{`{"hook_event_name":"SessionStart","source":"clear","session_id":"new"}`, mux.StateIdle, "", true},
+		{`{"hook_event_name":"SessionStart","source":"resume","session_id":"other"}`, mux.StateIdle, "", true},
+		{`{"hook_event_name":"SessionStart","source":"compact","session_id":"same"}`, "", "", false},
 		{`{"hook_event_name":"PreCompact"}`, "", "", false},
 		{`not json`, "", "", false},
 	}
@@ -57,7 +64,7 @@ func TestClaudeSettingsShape(t *testing.T) {
 	if err := json.Unmarshal([]byte(ClaudeSettings("/opt/it's/optimus")), &v); err != nil {
 		t.Fatal(err)
 	}
-	for _, ev := range []string{"UserPromptSubmit", "PreToolUse", "PermissionRequest", "Notification", "Stop", "SessionEnd"} {
+	for _, ev := range []string{"UserPromptSubmit", "PreToolUse", "PermissionRequest", "Notification", "Stop", "SessionStart", "SessionEnd"} {
 		h := v.Hooks[ev]
 		if len(h) != 1 || len(h[0].Hooks) != 1 || h[0].Hooks[0].Type != "command" {
 			t.Fatalf("%s: %+v", ev, h)
@@ -102,9 +109,57 @@ func TestResolve(t *testing.T) {
 	if got := Resolve(w, idleScreen); got.Message != "finished: done" {
 		t.Errorf("partial + idle screen: %+v", got)
 	}
-	Forget(map[string]bool{"%9": true})
+	// /clear ends the session but not the process: a live pane isn't exited
+	Write(Record{Pane: "%7", Agent: "claude", State: mux.StateExited, Full: true})
+	if got := Resolve(w, idleScreen); got.State != mux.StateIdle {
+		t.Errorf("a live pane reported exited: %+v", got)
+	}
+	if got := Resolve(mux.Window{ID: "@1", Pane: "%7", Dead: true}, idleScreen); got.State != mux.StateExited {
+		t.Errorf("a dead pane is exited: %+v", got)
+	}
+	Forget(map[string]bool{"%9": true}, time.Now())
 	if _, ok := Read("%7"); ok {
 		t.Error("Forget should drop records of dead panes")
+	}
+}
+
+func TestForgetKeepsRecordsNewerThanTheListing(t *testing.T) {
+	t.Setenv("OPTIMUS_HOME", t.TempDir())
+	listed := time.Now()
+	time.Sleep(10 * time.Millisecond)
+	// the first hook of a window opened after the panes were listed
+	Write(Record{Pane: "%3", Agent: "claude", State: mux.StateBusy, Full: true})
+	Forget(map[string]bool{}, listed)
+	if _, ok := Read("%3"); !ok {
+		t.Fatal("a record written after the listing was dropped")
+	}
+	Forget(map[string]bool{}, time.Now().Add(time.Second))
+	if _, ok := Read("%3"); ok {
+		t.Error("the next round should drop it")
+	}
+}
+
+func TestConcurrentWritesNeverTear(t *testing.T) {
+	t.Setenv("OPTIMUS_HOME", t.TempDir())
+	// parallel tool calls run their hooks at the same time
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				if err := Write(Record{Pane: "%4", Agent: "claude", State: mux.StateBusy, Message: strings.Repeat("x", 2000+i), Full: true}); err != nil {
+					t.Error(err)
+				}
+				if _, ok := Read("%4"); !ok {
+					t.Error("read a torn record")
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	if left, _ := filepath.Glob(filepath.Join(dir(), ".rec-*")); len(left) != 0 {
+		t.Errorf("temp files left behind: %v", left)
 	}
 }
 

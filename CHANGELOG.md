@@ -22,6 +22,15 @@ All notable changes to this project are documented here. The format follows [Kee
 - External pane ids (`ext:<socket>:<pane>`) arrive in API URLs and were joined to the tmux directory as given, so an encoded `../` could point `tmux -S` at any socket path. A socket must now be a plain name in your tmux directory and a pane a `%N` id; anything else is refused instead of falling through to the optimus server.
 - Handoff documents quote the conversation (pasted keys included) but were written world-readable (`0644` in a `0755` folder); they are now `0600` in a `0700` folder, and an existing folder is tightened.
 - The installer installed a release binary without verification when `checksums.txt` could not be downloaded; a missing checksum now aborts the install like a wrong one.
+- Taking over an agent always failed with "already running … take it over instead": the stopped agent was still in the 2-second process cache when its session resumed. Exited agents now leave the list at once, and take-over checks the pid still belongs to that agent before signalling it.
+- After `/clear` or `/resume`, a window showed *exited* and kept the old session until its next prompt. The Claude hook now also listens for `SessionStart`, ignores the `SessionEnd` of a `/clear`, and a live window is never shown as exited.
+- A Claude killed outright (out of memory, SIGKILL) left its `~/.claude/sessions/<pid>.json` behind, and once the pid was reused that dead session showed as running, or was pinned on another Claude. Entries now count only while the process start time matches.
+- Resuming a session whose folder is gone (a discarded worktree, a deleted checkout) ran the agent in the dashboard's folder, where Claude refuses with "This conversation is from a different directory". The folder is recreated, empty, and the session resumes there.
+- Resuming a session that ran in an agent worktree after its window closed lost the worktree: no diff, merge or discard. The worktree is re-attached to the new window.
+- Resuming the same session twice at once (a double click, a phone retry) started two agents on one transcript; two launches at once on a stopped multiplexer failed with "duplicate session".
+- Codex and opencode windows in one folder, before the agent reported a session id, showed whichever session was newest. Each window now gets the first session that started after it opened.
+- Concurrent saves from the web dashboard, the terminal dashboard and the CLI could tear the session cache, so the next start re-read the whole history. Concurrent hook writes (parallel tool calls) could tear an agent's state record, and the watcher could drop the record of a window opened while it was polling.
+- Per-agent scopes failed, and the agent died at start, when the tmux server had been started without `XDG_RUNTIME_DIR` (from cron, or over ssh without a login session).
 
 ## [0.3.0] - 2026-10-04
 
