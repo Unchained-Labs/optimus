@@ -33,7 +33,7 @@ jobs:
         run: pip install -r docs/requirements.txt
       - name: generate CLI reference and copy demo media
         run: make docs-gen
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - name: build site
         run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v5
