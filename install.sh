@@ -188,12 +188,13 @@ else
   else base="https://github.com/$REPO/releases/download/$VERSION"; fi
   info "downloading $asset ($VERSION)…"
   if fetch "$base/$asset" "$TMP/$asset"; then
-    if fetch "$base/checksums.txt" "$TMP/checksums.txt"; then
-      want=$(grep " $asset\$" "$TMP/checksums.txt" | awk '{print $1}')
-      if have sha256sum; then got=$(sha256sum "$TMP/$asset" | awk '{print $1}'); else got=$(shasum -a 256 "$TMP/$asset" | awk '{print $1}'); fi
-      if [ -z "$want" ] || [ "$want" != "$got" ]; then die "checksum mismatch for $asset"; fi
-      ok "checksum verified"
-    fi
+    # every release ships checksums.txt: a missing one is a failed check,
+    # not a reason to install an unverified binary
+    fetch "$base/checksums.txt" "$TMP/checksums.txt" || die "could not download checksums.txt for $VERSION — refusing an unverified binary (--from-source builds instead)"
+    want=$(grep " $asset\$" "$TMP/checksums.txt" | awk '{print $1}')
+    if have sha256sum; then got=$(sha256sum "$TMP/$asset" | awk '{print $1}'); else got=$(shasum -a 256 "$TMP/$asset" | awk '{print $1}'); fi
+    if [ -z "$want" ] || [ "$want" != "$got" ]; then die "checksum mismatch for $asset"; fi
+    ok "checksum verified"
     tar -xzf "$TMP/$asset" -C "$TMP" optimus || die "could not unpack $asset"
     ok "release binary"
   else

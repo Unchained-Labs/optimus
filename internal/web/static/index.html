@@ -30,6 +30,7 @@
   <button id="pal-btn" title="Command palette (Ctrl+K)">⌘K</button>
   <button class="primary" id="new-btn" title="New session (n)">＋ New session</button>
 </header>
+<div id="offline" class="offline" role="status" hidden></div>
 
 <main>
   <!-- FLEET -->
@@ -76,7 +77,7 @@
         <div id="term" class="term"></div>
         <div class="keys" id="keys"></div>
         <form class="prompt" id="prompt-form" autocomplete="off">
-          <textarea id="prompt" rows="1" placeholder="Message this agent…  (Enter to send, Shift+Enter for a new line)"></textarea>
+          <textarea id="prompt" rows="1" enterkeyhint="send" placeholder="Message this agent…  (Enter to send, Shift+Enter for a new line)"></textarea>
           <label class="bcast" title="Send to every running agent"><input type="checkbox" id="broadcast"> all</label>
           <button class="primary" type="submit">Send</button>
         </form>

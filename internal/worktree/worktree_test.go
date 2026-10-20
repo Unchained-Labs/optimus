@@ -76,6 +76,29 @@ func TestNotARepo(t *testing.T) {
 	}
 }
 
+func TestOfRecoversATreeWithoutItsWindow(t *testing.T) {
+	dir := repo(t)
+	tr, err := Create(dir, "claude", "add tests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(tr.Path, "a.txt"), []byte("changed\n"), 0o644)
+	exec.Command("git", "-C", tr.Path, "commit", "-qam", "work").Run()
+	got, ok := Of(tr.Path)
+	if !ok || got.Branch != tr.Branch || got.Base != tr.Base || !samePath(got.Repo, tr.Repo) || got.Path != tr.Path {
+		t.Fatalf("got %+v %v, want %+v", got, ok, tr)
+	}
+	if s, _ := got.Stats(); s.Commits != 1 {
+		t.Errorf("recovered tree lost the agent's work: %+v", s)
+	}
+	if _, ok := Of(dir); ok {
+		t.Error("the main checkout isn't an agent's worktree")
+	}
+	if _, ok := Of(filepath.Join(filepath.Dir(tr.Path), "gone")); ok {
+		t.Error("a missing folder isn't a worktree")
+	}
+}
+
 func TestCopyIncluded(t *testing.T) {
 	dir := repo(t)
 	write := func(rel, s string) {
